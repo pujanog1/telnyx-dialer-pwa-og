@@ -1,0 +1,1716 @@
+/* ==========================================================================
+   OUTREACH DIALER PRO — STYLESHEET
+   Design System: Linear / Vercel Dark Minimalist with Electric Glow Accents
+   ========================================================================== */
+
+:root {
+  --bg-primary: #080c14;
+  --bg-secondary: #0d1322;
+  --bg-card: #121a2d;
+  --bg-card-hover: #17223b;
+  --bg-input: #0a0f1d;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-focus: rgba(99, 102, 241, 0.6);
+  --border-highlight: rgba(129, 140, 248, 0.35);
+
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+
+  --accent-indigo: #6366f1;
+  --accent-purple: #8b5cf6;
+  --accent-cyan: #06b6d4;
+  --accent-sky: #38bdf8;
+  --accent-emerald: #10b981;
+  --accent-rose: #f43f5e;
+  --accent-amber: #f59e0b;
+
+  --gradient-brand: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%);
+  --gradient-call: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  --gradient-hangup: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%);
+  --gradient-card: linear-gradient(180deg, rgba(25, 34, 58, 0.7) 0%, rgba(13, 19, 34, 0.9) 100%);
+
+  --shadow-glow: 0 0 24px -4px rgba(99, 102, 241, 0.4);
+  --shadow-call: 0 4px 20px -2px rgba(16, 185, 129, 0.45);
+  --shadow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+
+  --font-main: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-full: 9999px;
+  --transition-fast: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-main);
+  font-family: var(--font-main);
+  line-height: 1.5;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background-image: 
+    radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.08) 0%, transparent 40%),
+    radial-gradient(circle at 85% 85%, rgba(139, 92, 246, 0.06) 0%, transparent 45%);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: var(--radius-full);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dim);
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ==========================================================================
+   APP CONTAINER & NAVIGATION
+   ========================================================================== */
+.app-container {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 16px 20px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Header */
+.top-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 22px;
+  background: rgba(18, 26, 45, 0.7);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background: var(--gradient-brand);
+  color: #fff;
+  box-shadow: var(--shadow-glow);
+}
+
+.brand-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gradient-badge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--gradient-brand);
+  color: #fff;
+  letter-spacing: 0.05em;
+}
+
+.brand-subtitle {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.nav-controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.system-status-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.status-pill.status-live .status-dot {
+  background: var(--accent-emerald);
+  box-shadow: 0 0 8px var(--accent-emerald);
+}
+
+.status-pill.status-sim .status-dot {
+  background: var(--accent-cyan);
+  box-shadow: 0 0 8px var(--accent-cyan);
+}
+
+.status-pill.status-connected .status-dot {
+  background: var(--accent-indigo);
+  box-shadow: 0 0 8px var(--accent-indigo);
+}
+
+.status-pill.status-ready .status-dot {
+  background: var(--accent-emerald);
+  box-shadow: 0 0 8px var(--accent-emerald);
+}
+
+.status-pill.status-connecting .status-dot {
+  background: var(--accent-amber);
+  box-shadow: 0 0 8px var(--accent-amber);
+}
+
+.status-pill.status-error .status-dot {
+  background: var(--accent-rose);
+  box-shadow: 0 0 8px var(--accent-rose);
+}
+
+.btn-webrtc-active {
+  background: rgba(16, 185, 129, 0.2) !important;
+  border-color: var(--accent-emerald) !important;
+  color: var(--accent-emerald) !important;
+}
+
+.action-buttons-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Mobile View Tabs (hidden on desktop) */
+.mobile-nav-tabs {
+  display: none;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 4px;
+  gap: 4px;
+}
+
+.mobile-tab-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.mobile-tab-btn.active {
+  background: var(--accent-indigo);
+  color: #fff;
+  box-shadow: var(--shadow-glow);
+}
+
+/* ==========================================================================
+   BUTTON SYSTEM
+   ========================================================================== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background: var(--accent-indigo);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.btn-primary:hover {
+  background: #4f46e5;
+  box-shadow: var(--shadow-glow);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-main);
+  border-color: var(--border-subtle);
+}
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border-color: var(--border-subtle);
+}
+.btn-ghost:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.btn-sm {
+  font-size: 0.78rem;
+  padding: 6px 10px;
+}
+
+.btn-xs {
+  font-size: 0.72rem;
+  padding: 4px 8px;
+}
+
+.btn-icon {
+  padding: 7px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+}
+.btn-icon:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ==========================================================================
+   DASHBOARD GRID LAYOUT (3 Columns)
+   ========================================================================== */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 360px 1fr 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.dash-card {
+  background: var(--gradient-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-card);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 640px;
+}
+
+.card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.card-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.card-desc {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  display: block;
+  margin-top: 2px;
+}
+
+.caller-id-pill {
+  font-size: 0.7rem;
+  padding: 4px 8px;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  color: var(--accent-sky);
+  border-radius: var(--radius-sm);
+}
+
+/* Card Internal Sub-tabs */
+.card-tab-nav {
+  display: flex;
+  gap: 6px;
+  background: rgba(10, 15, 29, 0.7);
+  padding: 4px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  margin-bottom: 16px;
+}
+
+.tab-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.tab-item:hover {
+  color: var(--text-main);
+}
+
+.tab-item.active {
+  background: var(--bg-card-hover);
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.tab-badge {
+  font-size: 0.65rem;
+  padding: 1px 6px;
+  background: rgba(99, 102, 241, 0.25);
+  color: var(--accent-sky);
+  border-radius: var(--radius-full);
+}
+
+.tab-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+/* ==========================================================================
+   COLUMN 1: PRO DIALER & ACTIVE CALL HUD
+   ========================================================================== */
+.dialer-card {
+  gap: 14px;
+}
+
+/* Active Call HUD */
+.active-call-hud {
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.85) 0%, rgba(15, 23, 42, 0.95) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.call-hud-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.call-hud-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  display: block;
+}
+
+.call-hud-company {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  display: block;
+}
+
+.call-hud-number {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--accent-sky);
+  display: block;
+  margin-top: 2px;
+}
+
+.pulse-status-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  background: rgba(16, 185, 129, 0.2);
+  color: var(--accent-emerald);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  animation: badgeBlink 1.5s infinite ease-in-out;
+}
+
+@keyframes badgeBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.call-timer-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 8px 0;
+}
+
+.call-timer-digits {
+  font-family: var(--font-mono);
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.05em;
+  text-shadow: 0 0 12px rgba(99, 102, 241, 0.5);
+}
+
+.audio-waves {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+}
+
+.audio-waves span {
+  display: inline-block;
+  width: 3px;
+  background: var(--accent-sky);
+  border-radius: 3px;
+  animation: wavePulse 1.2s infinite ease-in-out;
+}
+.audio-waves span:nth-child(1) { height: 6px; animation-delay: 0.1s; }
+.audio-waves span:nth-child(2) { height: 14px; animation-delay: 0.3s; }
+.audio-waves span:nth-child(3) { height: 20px; animation-delay: 0.2s; }
+.audio-waves span:nth-child(4) { height: 12px; animation-delay: 0.4s; }
+.audio-waves span:nth-child(5) { height: 8px; animation-delay: 0.25s; }
+
+@keyframes wavePulse {
+  0%, 100% { transform: scaleY(0.4); opacity: 0.4; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+
+.call-hud-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.btn-hud-tool {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  border-radius: var(--radius-md);
+  padding: 8px 14px;
+  font-size: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.btn-hud-tool:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-main);
+}
+
+.btn-hud-tool.active-muted {
+  background: rgba(244, 63, 94, 0.2);
+  border-color: var(--accent-rose);
+  color: var(--accent-rose);
+}
+
+.btn-hud-hangup {
+  background: var(--gradient-hangup);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 8px 20px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(244, 63, 94, 0.4);
+  transition: var(--transition-fast);
+}
+
+.btn-hud-hangup:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.1);
+}
+
+/* Phone Number Input Row */
+.phone-input-wrapper {
+  display: flex;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: var(--transition-fast);
+}
+
+.phone-input-wrapper:focus-within {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+}
+
+.country-select-box select {
+  background: rgba(255, 255, 255, 0.03);
+  border: none;
+  border-right: 1px solid var(--border-subtle);
+  color: var(--text-main);
+  padding: 12px 8px 12px 10px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  cursor: pointer;
+  outline: none;
+}
+
+.country-select-box select option {
+  background: var(--bg-card);
+  color: var(--text-main);
+}
+
+.number-input-box {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  padding-right: 6px;
+}
+
+.number-input-box input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 1.15rem;
+  font-weight: 600;
+  padding: 10px 12px;
+  outline: none;
+  width: 100%;
+}
+
+.btn-clear-digit {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-fast);
+}
+
+.btn-clear-digit:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Matched Contact Preview */
+.matched-contact-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px dashed rgba(99, 102, 241, 0.35);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  animation: fadeIn 0.2s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.matched-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent-indigo);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.matched-details {
+  flex: 1;
+}
+
+.matched-details span:first-child {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.matched-details span:last-child {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+/* Keypad Grid */
+.keypad-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 6px 0;
+}
+
+.keypad-btn {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px 6px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-fast);
+  user-select: none;
+}
+
+.keypad-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+  transform: translateY(-1px);
+}
+
+.keypad-btn:active {
+  background: rgba(99, 102, 241, 0.25);
+  border-color: var(--accent-indigo);
+  transform: translateY(1px);
+}
+
+.key-digit {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+}
+
+.key-sub {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: 0.1em;
+  margin-top: 3px;
+}
+
+/* Action Bar */
+.dialer-action-bar {
+  display: flex;
+  gap: 10px;
+  margin-top: auto;
+}
+
+.btn-call-primary {
+  flex: 1;
+  background: var(--gradient-call);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 14px 18px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-shadow: var(--shadow-call);
+  transition: var(--transition-fast);
+}
+
+.btn-call-primary:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.btn-icon-sq {
+  width: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+/* ==========================================================================
+   COLUMN 2: SMS OUTREACH & RECORDINGS
+   ========================================================================== */
+.communication-card {
+  gap: 12px;
+}
+
+/* SMS Section */
+.sms-recipient-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  margin-bottom: 10px;
+}
+
+.sms-recipient-row label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.sms-recipient-row input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.sms-template-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.template-label {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.sms-template-selector select {
+  flex: 1;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  outline: none;
+  cursor: pointer;
+}
+
+.sms-composer-box {
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.sms-composer-box textarea {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.85rem;
+  resize: none;
+  outline: none;
+  line-height: 1.4;
+}
+
+.composer-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  padding-top: 8px;
+}
+
+.char-count {
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+}
+
+.btn-send-sms {
+  background: var(--accent-indigo);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 6px 14px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.btn-send-sms:hover {
+  background: #4f46e5;
+  box-shadow: var(--shadow-glow);
+}
+
+.sms-feed-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.feed-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.feed-sub {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+.sms-thread-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.sms-bubble {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  position: relative;
+}
+
+.sms-bubble.outbound {
+  align-self: flex-end;
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+  color: #fff;
+  border-bottom-right-radius: 2px;
+}
+
+.sms-bubble.inbound {
+  align-self: flex-start;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-main);
+  border-bottom-left-radius: 2px;
+}
+
+.sms-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.65rem;
+  margin-top: 4px;
+  opacity: 0.75;
+}
+
+/* Call Recordings Hub */
+.recordings-header-row {
+  margin-bottom: 12px;
+}
+
+.sub-header-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.sub-header-desc {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+.recording-player-card {
+  background: rgba(10, 15, 29, 0.8);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  margin-bottom: 14px;
+}
+
+.player-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.player-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  display: block;
+}
+
+.player-subtitle {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  display: block;
+}
+
+.btn-play-action {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent-indigo);
+  border: none;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.btn-play-action:hover {
+  transform: scale(1.05);
+  box-shadow: var(--shadow-glow);
+}
+
+.player-progress-bar-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.player-seek {
+  width: 100%;
+  accent-color: var(--accent-indigo);
+  cursor: pointer;
+}
+
+.player-time-display {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-dim);
+}
+
+.recordings-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 380px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.recording-row-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: var(--transition-fast);
+}
+
+.recording-row-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.rec-info-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  display: block;
+}
+
+.rec-info-meta {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 2px;
+}
+
+.rec-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ==========================================================================
+   COLUMN 3: CONTACTS CRM & ACTIVITY FEED
+   ========================================================================== */
+.contacts-card {
+  gap: 12px;
+}
+
+.contacts-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.search-input-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  color: var(--text-dim);
+}
+
+.search-input-wrap input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 0.8rem;
+  outline: none;
+}
+
+.filter-chips-row {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  margin-bottom: 10px;
+}
+
+.filter-chip {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  border-radius: var(--radius-full);
+  padding: 3px 10px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: var(--transition-fast);
+}
+
+.filter-chip.active {
+  background: var(--accent-indigo);
+  color: #fff;
+  border-color: transparent;
+}
+
+.contacts-scroll-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 480px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.contact-card-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: var(--transition-fast);
+}
+
+.contact-card-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(99, 102, 241, 0.3);
+  transform: translateY(-1px);
+}
+
+.contact-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.contact-lead-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  display: block;
+}
+
+.contact-lead-company {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  display: block;
+}
+
+.lead-pill {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.lead-new { background: rgba(56, 189, 248, 0.15); color: var(--accent-sky); }
+.lead-interested { background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); }
+.lead-meeting { background: rgba(139, 92, 246, 0.15); color: var(--accent-purple); }
+.lead-followup { background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); }
+.lead-contacted { background: rgba(99, 102, 241, 0.15); color: var(--accent-indigo); }
+.lead-dnc { background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); }
+
+.contact-phone-badge {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--accent-sky);
+}
+
+.contact-notes-snippet {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  line-height: 1.35;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.contact-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  padding-top: 8px;
+  margin-top: 2px;
+}
+
+.quick-dial-group {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-lead-call {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--accent-emerald);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  font-size: 0.72rem;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.btn-lead-call:hover {
+  background: var(--accent-emerald);
+  color: #fff;
+}
+
+.btn-lead-sms {
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--accent-sky);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  font-size: 0.72rem;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.btn-lead-sms:hover {
+  background: var(--accent-indigo);
+  color: #fff;
+}
+
+/* Activity Logs List */
+.logs-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.logs-toolbar-title {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.logs-scroll-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 480px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.log-item-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  transition: var(--transition-fast);
+}
+
+.log-item-card:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.log-icon-wrap {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.log-call { background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); }
+.log-sms { background: rgba(99, 102, 241, 0.15); color: var(--accent-sky); }
+
+.log-content-wrap {
+  flex: 1;
+}
+
+.log-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.log-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.log-time {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+}
+
+.log-detail {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+  line-height: 1.35;
+}
+
+/* ==========================================================================
+   INCOMING CALL MODAL & RINGTONE PULSE
+   ========================================================================== */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 7, 13, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 16px;
+  animation: fadeIn 0.25s ease-out;
+}
+
+.incoming-call-box {
+  background: linear-gradient(180deg, #161e33 0%, #0d1220 100%);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  border-radius: 28px;
+  padding: 36px 30px;
+  width: 100%;
+  max-width: 380px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  box-shadow: 0 0 50px rgba(99, 102, 241, 0.35);
+}
+
+/* Pulse Rings */
+.ringing-pulse-orb {
+  position: relative;
+  width: 90px;
+  height: 90px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.phone-pulse-icon {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  background: var(--gradient-call);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  box-shadow: 0 0 25px rgba(16, 185, 129, 0.6);
+  animation: bouncePhone 0.8s infinite alternate ease-in-out;
+}
+
+@keyframes bouncePhone {
+  from { transform: rotate(-5deg) scale(0.96); }
+  to { transform: rotate(5deg) scale(1.04); }
+}
+
+.pulse-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 2px solid var(--accent-emerald);
+  opacity: 0;
+  animation: ringPulse 2s infinite cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.ring-1 { width: 90px; height: 90px; animation-delay: 0s; }
+.ring-2 { width: 120px; height: 120px; animation-delay: 0.5s; }
+.ring-3 { width: 150px; height: 150px; animation-delay: 1s; }
+
+@keyframes ringPulse {
+  0% { transform: scale(0.6); opacity: 0.8; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+
+.incoming-sublabel {
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  color: var(--accent-sky);
+  font-weight: 700;
+}
+
+.incoming-name {
+  font-size: 1.45rem;
+  font-weight: 700;
+  margin: 4px 0 2px;
+}
+
+.incoming-company {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  display: block;
+}
+
+.incoming-phone {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--accent-indigo);
+  display: block;
+  margin-top: 4px;
+}
+
+.incoming-actions {
+  display: flex;
+  gap: 18px;
+  width: 100%;
+  margin-top: 10px;
+}
+
+.btn-decline-call {
+  flex: 1;
+  background: var(--gradient-hangup);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(244, 63, 94, 0.4);
+  transition: var(--transition-fast);
+}
+
+.btn-decline-call:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.1);
+}
+
+.btn-answer-call {
+  flex: 1;
+  background: var(--gradient-call);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.4);
+  transition: var(--transition-fast);
+}
+
+.btn-answer-call:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.1);
+}
+
+/* ==========================================================================
+   CONTACT MODAL FORM
+   ========================================================================== */
+.modal-dialog-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: var(--shadow-card);
+  animation: slideDown 0.2s ease-out;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.modal-header h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.btn-close-modal {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 1.5rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.btn-close-modal:hover {
+  color: #fff;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.form-group label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: #fff;
+  padding: 8px 10px;
+  font-size: 0.82rem;
+  outline: none;
+  font-family: inherit;
+  transition: var(--transition-fast);
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  border-color: var(--border-focus);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+/* ==========================================================================
+   TOAST NOTIFICATION
+   ========================================================================== */
+.toast-popup {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: rgba(18, 26, 45, 0.95);
+  border: 1px solid var(--border-focus);
+  backdrop-filter: blur(12px);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: var(--shadow-glow);
+  z-index: 10000;
+  animation: slideUp 0.25s ease-out;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.toast-icon {
+  color: var(--accent-sky);
+}
+
+.toast-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  display: block;
+}
+
+.toast-msg {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  display: block;
+}
+
+.toast-close {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 1.2rem;
+  cursor: pointer;
+  margin-left: 8px;
+}
+
+/* ==========================================================================
+   MOBILE & TABLET RESPONSIVE DESIGN
+   ========================================================================== */
+@media (max-width: 1100px) {
+  .dashboard-grid {
+    grid-template-columns: 340px 1fr;
+  }
+  .contacts-card {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-container {
+    padding: 8px 10px 30px;
+    gap: 12px;
+  }
+
+  .top-nav {
+    padding: 10px 14px;
+  }
+
+  .brand-subtitle {
+    display: none;
+  }
+
+  .system-status-group {
+    display: none;
+  }
+
+  .mobile-nav-tabs {
+    display: flex;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dash-card {
+    display: none;
+    min-height: auto;
+  }
+
+  .dash-card.active-mobile {
+    display: flex;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+}
