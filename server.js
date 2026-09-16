@@ -330,6 +330,45 @@ app.post('/api/call/answer', async (req, res) => {
   }
 });
 
+app.post('/api/call/transfer', async (req, res) => {
+  const { callControlId, to } = req.body;
+  if (!to) {
+    return res.status(400).json({ error: 'Transfer destination phone number is required' });
+  }
+
+  try {
+    const result = await telnyx.transferCall({
+      callControlId,
+      to
+    });
+
+    // Append activity log
+    appendLog({
+      type: 'call',
+      direction: 'transfer',
+      from: process.env.TELNYX_PHONE_NUMBER || '+18005550199',
+      to,
+      contactName: 'Transferred Call',
+      company: '',
+      status: 'transferred',
+      duration: 0,
+      content: `Call transferred to ${to}`,
+      callControlId
+    });
+
+    broadcast('call_status', {
+      callControlId,
+      status: 'transferred',
+      transferTo: to
+    });
+
+    res.json({ success: true, message: `Call transferred to ${to}`, result });
+  } catch (err) {
+    console.error('Call transfer error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // WebRTC SIP Credentials & In-Browser Call Logging
 app.get('/api/webrtc/credentials', (req, res) => {
   const username = process.env.TELNYX_SIP_USERNAME || '';

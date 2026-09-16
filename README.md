@@ -17,7 +17,8 @@ A dark-mode dialer dashboard and CRM built for high-velocity cold outreach sales
 - **In-Browser WebRTC Calling:** Directly stream two-way audio through the browser's microphone and speaker using `@telnyx/webrtc` and Telnyx SIP credentials.
 - **Connect WebRTC Button:** Top-level authentication button in header with real-time status pill (`WebRTC: Ready`).
 - **Telnyx Call Control v2 Fallback:** Automatic fallback to server-side Call Control API if WebRTC is disconnected.
-- **Active Call HUD:** Live ticking duration timer (`00:00`), audio waveform activity, mute microphone toggle, and in-call DTMF dial pad.
+- **Live Call Transfer (Blind / Direct Hand-off):** In-call transfer button (`🔀 Transfer`) allows live routing of active calls to any external human agent, mobile, or PSTN number using Telnyx's `POST /calls/{call_control_id}/actions/transfer`.
+- **Active Call HUD:** Live ticking duration timer (`00:00`), audio waveform activity, mute microphone toggle, transfer modal, and in-call DTMF dial pad.
 - **Web Audio DTMF Synthesizer:** Real dual-tone multi-frequency audio generated on keypad clicks.
 
 ### 3. Incoming Call & SMS Alerts

@@ -199,6 +199,53 @@ class TelnyxClient {
       throw err;
     }
   }
+
+  /**
+   * Transfer an active call to another phone number or SIP URI
+   * Telnyx Call Control v2: POST /calls/{call_control_id}/actions/transfer
+   */
+  async transferCall({ callControlId, to }) {
+    if (!this.isConfigured() || (callControlId && callControlId.startsWith('sim_'))) {
+      console.log(`[Telnyx Simulator] Transferring call ${callControlId} to ${to}`);
+      return {
+        success: true,
+        mode: 'simulated',
+        call_control_id: callControlId,
+        to,
+        status: 'transferring'
+      };
+    }
+
+    try {
+      const payload = {
+        to
+      };
+
+      const response = await fetch(`${TELNYX_API_BASE}/calls/${encodeURIComponent(callControlId)}/actions/transfer`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.errors?.[0]?.detail || `Telnyx transfer error ${response.status}: ${JSON.stringify(data)}`);
+      }
+
+      return {
+        success: true,
+        mode: 'live',
+        ...data.data
+      };
+    } catch (err) {
+      console.error('[Telnyx API Error] transferCall failed:', err.message);
+      throw err;
+    }
+  }
 }
 
 module.exports = new TelnyxClient();
+

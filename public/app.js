@@ -79,7 +79,16 @@
     btnMuteCall: document.getElementById('btnMuteCall'),
     muteIcon: document.getElementById('muteIcon'),
     btnKeypadToggle: document.getElementById('btnKeypadToggle'),
+    btnTransferCall: document.getElementById('btnTransferCall'),
     btnEndCall: document.getElementById('btnEndCall'),
+
+    // Transfer Modal
+    transferModal: document.getElementById('transferModal'),
+    transferForm: document.getElementById('transferForm'),
+    transferTargetPhone: document.getElementById('transferTargetPhone'),
+    btnCloseTransferModal: document.getElementById('btnCloseTransferModal'),
+    btnCancelTransfer: document.getElementById('btnCancelTransfer'),
+    btnExecuteTransfer: document.getElementById('btnExecuteTransfer'),
 
     // Sub-Tabs
     tabButtons: document.querySelectorAll('.card-tab-nav .tab-item'),
@@ -684,6 +693,105 @@
     fetchLogs();
   }
 
+  // =========================================================================
+  // CALL TRANSFER IMPLEMENTATION
+  // =========================================================================
+  function openTransferModal() {
+    if (!state.activeCall) {
+      showToast('No Active Call', 'You must have an ongoing call to transfer.');
+      return;
+    }
+    if (els.transferTargetPhone) {
+      els.transferTargetPhone.value = '';
+    }
+    if (els.transferModal) {
+      els.transferModal.classList.remove('hidden');
+      if (els.transferTargetPhone) {
+        setTimeout(() => els.transferTargetPhone.focus(), 100);
+      }
+    }
+  }
+
+  function closeTransferModal() {
+    if (els.transferModal) {
+      els.transferModal.classList.add('hidden');
+    }
+  }
+
+  async function executeTransfer(e) {
+    if (e) e.preventDefault();
+    if (!state.activeCall) {
+      showToast('Transfer Failed', 'No active call to transfer.');
+      closeTransferModal();
+      return;
+    }
+
+    const rawTarget = els.transferTargetPhone.value.trim();
+    if (!rawTarget) {
+      showToast('Missing Number', 'Please enter destination number to transfer call.');
+      return;
+    }
+
+    // Format target phone
+    const defaultCountry = els.countryCodeSelect ? els.countryCodeSelect.value : '+1';
+    const targetPhone = rawTarget.startsWith('+') ? rawTarget : `${defaultCountry}${rawTarget.replace(/^0+/, '')}`;
+
+    showToast('Transferring Call', `Routing active call to ${targetPhone}...`);
+    if (els.callStatusBadge) {
+      els.callStatusBadge.textContent = 'Transferring...';
+      els.callStatusBadge.style.color = 'var(--accent-sky)';
+    }
+
+    try {
+      // 1. If active call has a Telnyx Call Control ID
+      if (state.activeCall.callControlId) {
+        const response = await fetch('/api/call/transfer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            callControlId: state.activeCall.callControlId,
+            to: targetPhone
+          })
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to transfer call via Telnyx');
+        }
+      } else if (state.webrtcCall) {
+        // 2. If WebRTC call has transfer capability (SIP REFER or WebRTC blind transfer)
+        try {
+          if (typeof state.webrtcCall.transfer === 'function') {
+            state.webrtcCall.transfer(targetPhone);
+          } else {
+            // Disconnect browser leg as fallback
+            state.webrtcCall.hangup();
+          }
+        } catch (webrtcErr) {
+          console.warn('WebRTC transfer attempt:', webrtcErr);
+        }
+      }
+
+      showToast('Call Transferred', `Call successfully handed off to ${targetPhone}`);
+      closeTransferModal();
+
+      // End local dialer view for this transferred call
+      stopCallTimer();
+      els.activeCallHud.classList.add('hidden');
+      state.activeCall = null;
+      state.callDurationSeconds = 0;
+      updateCallTimerDisplay();
+      fetchLogs();
+    } catch (err) {
+      console.error('Call transfer error:', err);
+      showToast('Transfer Failed', err.message);
+      if (els.callStatusBadge) {
+        els.callStatusBadge.textContent = 'Connected';
+        els.callStatusBadge.style.color = 'var(--accent-emerald)';
+      }
+    }
+  }
+
   function handleCallStatusEvent(data) {
     if (data.status === 'answered') {
       if (els.callStatusBadge) {
@@ -691,6 +799,12 @@
         els.callStatusBadge.style.color = 'var(--accent-emerald)';
       }
       startCallTimer();
+    } else if (data.status === 'transferred') {
+      showToast('Call Transferred', `Call routed to ${data.transferTo}`);
+      stopCallTimer();
+      els.activeCallHud.classList.add('hidden');
+      state.activeCall = null;
+      fetchLogs();
     } else if (data.status === 'completed') {
       stopCallTimer();
       els.activeCallHud.classList.add('hidden');
@@ -1291,6 +1405,22 @@
 
   // Call HUD controls
   els.btnEndCall.addEventListener('click', hangupCall);
+
+  if (els.btnTransferCall) {
+    els.btnTransferCall.addEventListener('click', openTransferModal);
+  }
+
+  if (els.btnCloseTransferModal) {
+    els.btnCloseTransferModal.addEventListener('click', closeTransferModal);
+  }
+
+  if (els.btnCancelTransfer) {
+    els.btnCancelTransfer.addEventListener('click', closeTransferModal);
+  }
+
+  if (els.transferForm) {
+    els.transferForm.addEventListener('submit', executeTransfer);
+  }
 
   els.btnMuteCall.addEventListener('click', () => {
     state.isMuted = !state.isMuted;

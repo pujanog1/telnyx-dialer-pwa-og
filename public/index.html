@@ -147,6 +147,10 @@
               <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
               <span>Keypad</span>
             </button>
+            <button id="btnTransferCall" class="btn-hud-tool btn-hud-transfer" title="Transfer Call">
+              <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>
+              <span>Transfer</span>
+            </button>
             <button id="btnEndCall" class="btn-hud-hangup" title="Hang Up Call">
               <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="currentColor"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
               <span>End Call</span>
@@ -499,6 +503,35 @@
           <div class="modal-actions">
             <button type="button" id="btnCancelContact" class="btn btn-secondary">Cancel</button>
             <button type="submit" id="btnSaveContact" class="btn btn-primary">Save Lead</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- CALL TRANSFER MODAL -->
+    <div id="transferModal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title-wrap">
+            <h3 class="modal-title">Transfer Active Call</h3>
+            <span class="modal-desc">Transfer the ongoing conversation to another number or agent</span>
+          </div>
+          <button id="btnCloseTransferModal" class="btn-close-modal">&times;</button>
+        </div>
+        <form id="transferForm" class="modal-form">
+          <div class="form-group">
+            <label for="transferTargetPhone">Forward / Transfer To (E.164) *</label>
+            <input type="tel" id="transferTargetPhone" required placeholder="e.g. +12065550199" autocomplete="tel">
+            <small style="color: var(--text-muted); font-size: 0.72rem; margin-top: 4px; display: block;">
+              Enter full country code (e.g. +1 for US, +91 for India).
+            </small>
+          </div>
+          <div class="modal-actions">
+            <button type="button" id="btnCancelTransfer" class="btn btn-secondary">Cancel</button>
+            <button type="submit" id="btnExecuteTransfer" class="btn btn-primary" style="background: var(--accent-sky); border-color: var(--accent-sky);">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" style="margin-right: 4px; vertical-align: middle;"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>
+              Transfer Call
+            </button>
           </div>
         </form>
       </div>

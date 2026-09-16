@@ -579,6 +579,12 @@ body {
   color: var(--accent-rose);
 }
 
+.btn-hud-transfer:hover {
+  background: rgba(14, 165, 233, 0.2);
+  border-color: var(--accent-sky);
+  color: var(--accent-sky);
+}
+
 .btn-hud-hangup {
   background: var(--gradient-hangup);
   color: #fff;
