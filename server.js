@@ -64,11 +64,22 @@ function extractIncomingMessageText(payload) {
   if (!payload) return '';
   if (typeof payload === 'string') return payload;
 
-  // 1. Direct text string
+  // 1. Telnyx WhatsApp v2 nested structure: payload.body.text.body
+  if (payload.body && typeof payload.body === 'object') {
+    if (payload.body.text?.body) return String(payload.body.text.body);
+    if (typeof payload.body.text === 'string') return payload.body.text;
+    if (payload.body.text && typeof payload.body.text === 'object') {
+      try {
+        if (payload.body.text.body) return String(payload.body.text.body);
+      } catch (e) {}
+    }
+  }
+
+  // 2. Direct text string
   if (typeof payload.text === 'string') return payload.text;
   if (typeof payload.body === 'string') return payload.body;
 
-  // 2. WhatsApp text object: { text: { body: "hello" } }
+  // 3. WhatsApp text object: { text: { body: "hello" } }
   if (payload.text && typeof payload.text === 'object') {
     if (payload.text.body) return String(payload.text.body);
   }
@@ -659,55 +670,91 @@ app.post('/incoming-call', (req, res) => {
 
 // Webhook: /incoming-sms & /incoming-whatsapp
 app.post(['/incoming-sms', '/incoming-whatsapp'], (req, res) => {
-  console.log('[Telnyx Webhook /incoming-sms] Received:', JSON.stringify(req.body));
-  const payload = req.body?.data?.payload || req.body?.entry?.[0]?.changes?.[0]?.value || req.body;
-  
+  const rawBody = req.body || {};
+  const payload = rawBody.data?.payload || rawBody.entry?.[0]?.changes?.[0]?.value || rawBody;
+
+  // Debug log requested by user
+  console.log('[SMS/WA webhook] body.type =', payload.body?.type, '| text =', payload.body?.text?.body);
+  console.log('[Telnyx Webhook /incoming-sms] Received:', JSON.stringify(rawBody));
+
+  // Determine if this is a WhatsApp message
+  const isWhatsApp = 
+    payload.body?.type === 'WHATSAPP' || 
+    payload.type === 'WHATSAPP' || 
+    req.path.includes('whatsapp') || 
+    Boolean(payload.entry || payload.contacts);
+
+  // Extract readable text
+  let text = '';
+  if (payload.body?.text?.body) {
+    text = payload.body.text.body;
+  } else if (payload.text?.body) {
+    text = payload.text.body;
+  } else if (typeof payload.text === 'string') {
+    text = payload.text;
+  } else if (typeof payload.body === 'string') {
+    text = payload.body;
+  } else {
+    text = extractIncomingMessageText(payload) || '(No text)';
+  }
+
   // Extract sender phone
-  let from = payload.from?.phone_number || payload.from;
-  if (!from && payload.messages?.[0]?.from) {
+  let from = '';
+  if (payload.body?.from?.phone_number) {
+    from = payload.body.from.phone_number;
+  } else if (payload.from?.phone_number) {
+    from = payload.from.phone_number;
+  } else if (payload.from) {
+    from = typeof payload.from === 'object' ? (payload.from.phone_number || JSON.stringify(payload.from)) : payload.from;
+  } else if (payload.messages?.[0]?.from) {
     from = payload.messages[0].from;
-  }
-  if (!from && payload.contacts?.[0]?.wa_id) {
+  } else if (payload.contacts?.[0]?.wa_id) {
     from = payload.contacts[0].wa_id;
-  }
-  if (typeof from === 'object') {
-    from = from.phone_number || JSON.stringify(from);
   }
   from = from ? (String(from).startsWith('+') ? String(from) : `+${from}`) : 'Unknown';
 
   // Extract recipient phone
-  let to = payload.to?.[0]?.phone_number || payload.to || payload.recipient_id || process.env.TELNYX_PHONE_NUMBER;
-  if (typeof to === 'object') {
-    to = to.phone_number || process.env.TELNYX_PHONE_NUMBER;
+  let to = '';
+  if (payload.body?.to?.[0]?.phone_number) {
+    to = payload.body.to[0].phone_number;
+  } else if (payload.to?.[0]?.phone_number) {
+    to = payload.to[0].phone_number;
+  } else if (payload.to) {
+    to = typeof payload.to === 'object' ? (payload.to.phone_number || JSON.stringify(payload.to)) : payload.to;
+  } else {
+    to = process.env.TELNYX_PHONE_NUMBER || '+12065960776';
   }
 
-  // Extract actual readable message text
-  const text = extractIncomingMessageText(payload) || '(No text)';
-
-  const isWhatsApp = req.path.includes('whatsapp') || Boolean(payload.entry || payload.contacts || payload.type === 'whatsapp');
   const contact = findContactByPhone(from);
   const senderName = contact ? contact.name : (payload.contacts?.[0]?.profile?.name || 'Prospect');
   const company = contact ? contact.company : '';
 
-  appendLog({
+  // Save log entry matching both data/logs.json schema and user requirements
+  const logEntry = appendLog({
     type: 'sms',
     direction: 'inbound',
     from,
-    to: to || 'Dialer',
+    to,
     contactName: senderName,
     company,
     status: 'received',
-    content: text
+    content: text,
+    text: text,
+    channel: isWhatsApp ? 'WHATSAPP' : 'SMS',
+    messageType: isWhatsApp ? 'WHATSAPP' : 'SMS'
   });
 
+  // Broadcast to WebSocket clients for live UI update
   broadcast('incoming_sms', {
-    id: 'msg_' + Date.now(),
+    id: logEntry.id || ('msg_' + Date.now()),
     from,
-    to: to || 'Dialer',
+    to,
     senderName,
     company,
     text,
-    channel: isWhatsApp ? 'whatsapp' : 'sms',
+    content: text,
+    channel: isWhatsApp ? 'WHATSAPP' : 'SMS',
+    type: isWhatsApp ? 'WHATSAPP' : 'SMS',
     timestamp: new Date().toISOString()
   });
 
