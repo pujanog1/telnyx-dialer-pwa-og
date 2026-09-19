@@ -1613,8 +1613,20 @@
 
   // Utilities
   function escapeHtml(str) {
-    if (!str) return '';
-    return String(str)
+    if (!str && str !== 0) return '';
+    let val = str;
+    if (typeof val === 'object') {
+      if (val.body) val = val.body;
+      else if (val.text) val = typeof val.text === 'object' ? val.text.body || JSON.stringify(val.text) : val.text;
+      else {
+        try {
+          val = JSON.stringify(val);
+        } catch (e) {
+          val = String(val);
+        }
+      }
+    }
+    return String(val)
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')

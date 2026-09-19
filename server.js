@@ -57,6 +57,68 @@ function findContactByPhone(phone) {
   }) || null;
 }
 
+/**
+ * Universal text extractor for Telnyx SMS & WhatsApp inbound webhooks
+ */
+function extractIncomingMessageText(payload) {
+  if (!payload) return '';
+  if (typeof payload === 'string') return payload;
+
+  // 1. Direct text string
+  if (typeof payload.text === 'string') return payload.text;
+  if (typeof payload.body === 'string') return payload.body;
+
+  // 2. WhatsApp text object: { text: { body: "hello" } }
+  if (payload.text && typeof payload.text === 'object') {
+    if (payload.text.body) return String(payload.text.body);
+  }
+
+  // 3. Meta / WhatsApp Cloud style: { entry: [ { changes: [ { value: { messages: [ { text: { body: "..." } } ] } } ] } ] }
+  if (Array.isArray(payload.entry)) {
+    for (const entry of payload.entry) {
+      if (Array.isArray(entry.changes)) {
+        for (const change of entry.changes) {
+          const msgs = change.value?.messages;
+          if (Array.isArray(msgs) && msgs.length > 0) {
+            const firstMsg = msgs[0];
+            if (firstMsg.text?.body) return String(firstMsg.text.body);
+            if (firstMsg.button?.text) return String(firstMsg.button.text);
+            if (firstMsg.interactive?.button_reply?.title) return String(firstMsg.interactive.button_reply.title);
+            if (firstMsg.interactive?.list_reply?.title) return String(firstMsg.interactive.list_reply.title);
+            if (firstMsg.type) return `[${firstMsg.type.toUpperCase()}]`;
+          }
+        }
+      }
+    }
+  }
+
+  // 4. Telnyx nested payload / messages array
+  if (Array.isArray(payload.messages) && payload.messages.length > 0) {
+    const m = payload.messages[0];
+    if (typeof m === 'string') return m;
+    if (m.text?.body) return String(m.text.body);
+    if (m.text) return String(m.text);
+    if (m.body) return String(m.body);
+  }
+
+  // 5. Media attachment in WhatsApp / MMS
+  if (payload.media && Array.isArray(payload.media) && payload.media.length > 0) {
+    return `[Media: ${payload.media[0].content_type || 'Attachment'}]`;
+  }
+
+  // 6. WhatsApp interactive / template replies
+  if (payload.interactive?.button_reply?.title) {
+    return String(payload.interactive.button_reply.title);
+  }
+
+  // Fallback: If it's still an object, try JSON.stringify or safe string
+  try {
+    return JSON.stringify(payload);
+  } catch (e) {
+    return String(payload);
+  }
+}
+
 function appendLog(entry) {
   const logs = readJson(LOGS_FILE, []);
   const newEntry = {
@@ -595,23 +657,43 @@ app.post('/incoming-call', (req, res) => {
   res.status(200).json({ status: 'ok', received: true });
 });
 
-// Webhook: /incoming-sms
-app.post('/incoming-sms', (req, res) => {
+// Webhook: /incoming-sms & /incoming-whatsapp
+app.post(['/incoming-sms', '/incoming-whatsapp'], (req, res) => {
   console.log('[Telnyx Webhook /incoming-sms] Received:', JSON.stringify(req.body));
-  const payload = req.body?.data?.payload || req.body;
-  const from = payload.from?.phone_number || payload.from || 'Unknown';
-  const to = payload.to?.[0]?.phone_number || payload.to || process.env.TELNYX_PHONE_NUMBER;
-  const text = payload.text || payload.body || '';
+  const payload = req.body?.data?.payload || req.body?.entry?.[0]?.changes?.[0]?.value || req.body;
+  
+  // Extract sender phone
+  let from = payload.from?.phone_number || payload.from;
+  if (!from && payload.messages?.[0]?.from) {
+    from = payload.messages[0].from;
+  }
+  if (!from && payload.contacts?.[0]?.wa_id) {
+    from = payload.contacts[0].wa_id;
+  }
+  if (typeof from === 'object') {
+    from = from.phone_number || JSON.stringify(from);
+  }
+  from = from ? (String(from).startsWith('+') ? String(from) : `+${from}`) : 'Unknown';
 
+  // Extract recipient phone
+  let to = payload.to?.[0]?.phone_number || payload.to || payload.recipient_id || process.env.TELNYX_PHONE_NUMBER;
+  if (typeof to === 'object') {
+    to = to.phone_number || process.env.TELNYX_PHONE_NUMBER;
+  }
+
+  // Extract actual readable message text
+  const text = extractIncomingMessageText(payload) || '(No text)';
+
+  const isWhatsApp = req.path.includes('whatsapp') || Boolean(payload.entry || payload.contacts || payload.type === 'whatsapp');
   const contact = findContactByPhone(from);
-  const senderName = contact ? contact.name : 'Prospect';
+  const senderName = contact ? contact.name : (payload.contacts?.[0]?.profile?.name || 'Prospect');
   const company = contact ? contact.company : '';
 
   appendLog({
     type: 'sms',
     direction: 'inbound',
     from,
-    to,
+    to: to || 'Dialer',
     contactName: senderName,
     company,
     status: 'received',
@@ -619,19 +701,20 @@ app.post('/incoming-sms', (req, res) => {
   });
 
   broadcast('incoming_sms', {
-    id: 'sms_' + Date.now(),
+    id: 'msg_' + Date.now(),
     from,
-    to,
+    to: to || 'Dialer',
     senderName,
     company,
     text,
+    channel: isWhatsApp ? 'whatsapp' : 'sms',
     timestamp: new Date().toISOString()
   });
 
   res.status(200).json({ status: 'ok', received: true });
 });
 
-// General Telnyx Call Control v2 event callback
+// General Telnyx Call Control & Messaging v2 event callback
 app.post('/webhook', (req, res) => {
   const event = req.body?.data?.event_type;
   const payload = req.body?.data?.payload || {};
@@ -657,6 +740,36 @@ app.post('/webhook', (req, res) => {
       durationFormatted: `${Math.floor((payload.duration_secs || 0)/60)}:${((payload.duration_secs || 0)%60).toString().padStart(2,'0')}`,
       channels: payload.channels || 'single',
       phoneNumber: payload.to || 'Contact'
+    });
+  } else if (event === 'message.received' || event?.startsWith('message.')) {
+    // If Telnyx sends inbound message to general /webhook
+    const from = payload.from?.phone_number || payload.from || 'Unknown';
+    const to = payload.to?.[0]?.phone_number || payload.to || process.env.TELNYX_PHONE_NUMBER;
+    const text = extractIncomingMessageText(payload) || '(No text)';
+
+    const contact = findContactByPhone(from);
+    const senderName = contact ? contact.name : 'Prospect';
+    const company = contact ? contact.company : '';
+
+    appendLog({
+      type: 'sms',
+      direction: 'inbound',
+      from,
+      to,
+      contactName: senderName,
+      company,
+      status: 'received',
+      content: text
+    });
+
+    broadcast('incoming_sms', {
+      id: 'sms_' + Date.now(),
+      from,
+      to,
+      senderName,
+      company,
+      text,
+      timestamp: new Date().toISOString()
     });
   }
 
