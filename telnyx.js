@@ -201,6 +201,69 @@ class TelnyxClient {
   }
 
   /**
+   * Send a WhatsApp message via Telnyx Messaging v2 API
+   */
+  async sendWhatsApp({ to, from, text }) {
+    const sender = from || this.fromNumber;
+
+    if (!this.isConfigured()) {
+      console.log(`[Telnyx Simulator] Simulating outbound WhatsApp to ${to} from ${sender}: "${text}"`);
+      return {
+        success: true,
+        mode: 'simulated',
+        id: 'sim_wa_' + Math.random().toString(36).substring(2, 9),
+        to,
+        from: sender,
+        text,
+        type: 'WHATSAPP',
+        status: 'delivered',
+        created_at: new Date().toISOString()
+      };
+    }
+
+    try {
+      const payload = {
+        to,
+        from: sender,
+        whatsapp_message: {
+          type: 'text',
+          text: {
+            body: text
+          }
+        }
+      };
+
+      if (process.env.TELNYX_MESSAGING_PROFILE_ID) {
+        payload.messaging_profile_id = process.env.TELNYX_MESSAGING_PROFILE_ID;
+      }
+
+      const response = await fetch(`${TELNYX_API_BASE}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.errors?.[0]?.detail || `Telnyx WhatsApp error ${response.status}: ${JSON.stringify(data)}`);
+      }
+
+      return {
+        success: true,
+        mode: 'live',
+        ...data.data
+      };
+    } catch (err) {
+      console.error('[Telnyx API Error] sendWhatsApp failed:', err.message);
+      throw err;
+    }
+  }
+
+  /**
    * Transfer an active call to another phone number or SIP URI
    * Telnyx Call Control v2: POST /calls/{call_control_id}/actions/transfer
    */

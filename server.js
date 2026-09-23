@@ -552,6 +552,64 @@ app.post('/api/sms/send', async (req, res) => {
   }
 });
 
+// 5b. WhatsApp Messaging
+app.post('/api/whatsapp/send', async (req, res) => {
+  const { to, text, from } = req.body;
+  if (!to || !text) {
+    return res.status(400).json({ error: 'Recipient phone and message text are required' });
+  }
+
+  const contact = findContactByPhone(to);
+  const fromNumber = from || process.env.TELNYX_PHONE_NUMBER || '+12065960776';
+
+  try {
+    const result = await telnyx.sendWhatsApp({ to, from: fromNumber, text });
+
+    const logEntry = appendLog({
+      type: 'sms',
+      direction: 'outbound',
+      from: fromNumber,
+      to,
+      contactName: contact ? contact.name : 'Unknown Contact',
+      company: contact ? contact.company : '',
+      status: 'delivered',
+      content: text,
+      text: text,
+      channel: 'WHATSAPP',
+      messageType: 'WHATSAPP'
+    });
+
+    if (contact) {
+      const contacts = readJson(CONTACTS_FILE, []);
+      const idx = contacts.findIndex(c => c.id === contact.id);
+      if (idx !== -1) {
+        contacts[idx].lastContacted = new Date().toISOString();
+        writeJson(CONTACTS_FILE, contacts);
+      }
+    }
+
+    // Broadcast for live UI update across tabs
+    broadcast('incoming_sms', {
+      id: logEntry.id,
+      from: fromNumber,
+      to,
+      senderName: 'You',
+      company: contact ? contact.company : '',
+      text,
+      content: text,
+      direction: 'outbound',
+      channel: 'WHATSAPP',
+      type: 'WHATSAPP',
+      timestamp: new Date().toISOString()
+    });
+
+    res.json({ success: true, result, log: logEntry });
+  } catch (err) {
+    console.error('Send WhatsApp error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 6. Interactive Simulators (for immediate test verification)
 app.post('/api/call/simulate-incoming', (req, res) => {
   const contacts = readJson(CONTACTS_FILE, []);
@@ -627,6 +685,56 @@ app.post('/api/sms/simulate-incoming', (req, res) => {
 
   broadcast('incoming_sms', smsData);
   res.json({ success: true, simulatedSms: smsData });
+});
+
+app.post('/api/whatsapp/simulate-incoming', (req, res) => {
+  const sampleMessages = [
+    "Hello! I am reviewing the proposal on WhatsApp. Can you confirm pricing?",
+    "Hey! Got your message on WhatsApp. Let's connect this afternoon.",
+    "Hi, please send the brochure and catalog here on WhatsApp.",
+    "Thank you! The quotation looks good to proceed."
+  ];
+
+  const contacts = readJson(CONTACTS_FILE, []);
+  const contact = contacts.length > 0 ? contacts[Math.floor(Math.random() * contacts.length)] : null;
+  const senderPhone = req.body.from || contact?.phone || '+918330183835';
+  const senderName = contact?.name || 'WhatsApp Prospect';
+  const company = contact?.company || 'WhatsApp Client';
+  const text = req.body.text || sampleMessages[Math.floor(Math.random() * sampleMessages.length)];
+
+  const waData = {
+    id: 'wa_' + Date.now(),
+    from: senderPhone,
+    to: process.env.TELNYX_PHONE_NUMBER || '+12065960776',
+    senderName,
+    company,
+    text,
+    content: text,
+    channel: 'WHATSAPP',
+    type: 'WHATSAPP',
+    timestamp: new Date().toISOString()
+  };
+
+  const logEntry = appendLog({
+    type: 'sms',
+    direction: 'inbound',
+    from: senderPhone,
+    to: waData.to,
+    contactName: senderName,
+    company,
+    status: 'received',
+    content: text,
+    text: text,
+    channel: 'WHATSAPP',
+    messageType: 'WHATSAPP'
+  });
+
+  broadcast('incoming_sms', {
+    ...waData,
+    id: logEntry.id
+  });
+
+  res.json({ success: true, simulatedWhatsApp: waData });
 });
 
 // ==========================================

@@ -23,7 +23,10 @@
     webrtcClient: null,
     webrtcConnected: false,
     webrtcCall: null,
-    webrtcConfig: null
+    webrtcConfig: null,
+    activeWaPhone: null,
+    waConversations: [],
+    waMessages: []
   };
 
   // DTMF Standard Frequencies (Hz)
@@ -101,6 +104,27 @@
     smsCharCounter: document.getElementById('smsCharCounter'),
     btnSendSms: document.getElementById('btnSendSms'),
     smsMessageList: document.getElementById('smsMessageList'),
+
+    // WhatsApp Tab Elements
+    btnSimWa: document.getElementById('btnSimWa'),
+    waUnreadTotalBadge: document.getElementById('waUnreadTotalBadge'),
+    waSearchInput: document.getElementById('waSearchInput'),
+    btnNewWaChat: document.getElementById('btnNewWaChat'),
+    waNewChatDrawer: document.getElementById('waNewChatDrawer'),
+    waNewChatPhone: document.getElementById('waNewChatPhone'),
+    btnStartWaChatConfirm: document.getElementById('btnStartWaChatConfirm'),
+    btnCancelWaChatDrawer: document.getElementById('btnCancelWaChatDrawer'),
+    waConversationsList: document.getElementById('waConversationsList'),
+    waNoChatSelected: document.getElementById('waNoChatSelected'),
+    waActiveChatView: document.getElementById('waActiveChatView'),
+    waHeaderAvatar: document.getElementById('waHeaderAvatar'),
+    waHeaderName: document.getElementById('waHeaderName'),
+    waHeaderPhone: document.getElementById('waHeaderPhone'),
+    btnCallWaContact: document.getElementById('btnCallWaContact'),
+    btnSmsWaContact: document.getElementById('btnSmsWaContact'),
+    waMessagesThread: document.getElementById('waMessagesThread'),
+    waMessageInput: document.getElementById('waMessageInput'),
+    btnSendWhatsApp: document.getElementById('btnSendWhatsApp'),
 
     // Recordings Tab
     recordingsList: document.getElementById('recordingsList'),
@@ -885,11 +909,24 @@
   });
 
   // =========================================================================
-  // SMS OUTREACH
+  // SMS & WHATSAPP INBOUND EVENT HANDLING
   // =========================================================================
   function handleIncomingSmsEvent(data) {
-    showToast(`SMS from ${data.senderName || data.from}`, data.text, 6000);
-    triggerSystemNotification(`SMS from ${data.senderName || data.from}`, data.text);
+    const isWa = data.channel === 'WHATSAPP' || data.type === 'WHATSAPP';
+    if (isWa) {
+      showToast(`WhatsApp from ${data.senderName || data.from}`, data.text || data.content, 6000);
+      triggerSystemNotification(`WhatsApp from ${data.senderName || data.from}`, data.text || data.content);
+      // Increment unread count if not currently chatting with this contact
+      const cleanPhone = normalizePhone(data.from);
+      if (cleanPhone && cleanPhone !== normalizePhone(state.activeWaPhone)) {
+        const unreadKey = 'wa_unread_' + cleanPhone;
+        const currentUnread = parseInt(localStorage.getItem(unreadKey) || '0', 10);
+        localStorage.setItem(unreadKey, currentUnread + 1);
+      }
+    } else {
+      showToast(`SMS from ${data.senderName || data.from}`, data.text, 6000);
+      triggerSystemNotification(`SMS from ${data.senderName || data.from}`, data.text);
+    }
     fetchLogs();
   }
 
@@ -977,6 +1014,387 @@
   });
 
   els.btnSendSms.addEventListener('click', sendOutboundSms);
+
+  // =========================================================================
+  // WHATSAPP PER-PERSON CHAT CONTROLLER
+  // =========================================================================
+  function normalizePhone(p) {
+    if (!p) return '';
+    return String(p).replace(/[^0-9+]/g, '');
+  }
+
+  function formatDisplayTime(isoString) {
+    if (!isoString) return '';
+    try {
+      const d = new Date(isoString);
+      const now = new Date();
+      if (d.toDateString() === now.toDateString()) {
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
+      return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    } catch (e) {
+      return '';
+    }
+  }
+
+  // Load and group conversations table (per-person WhatsApp chats)
+  function renderWhatsAppConversations() {
+    if (!els.waConversationsList) return;
+
+    // 1. Filter all logs that are WHATSAPP messages
+    const waLogs = state.logs.filter(l => 
+      l.channel === 'WHATSAPP' || 
+      l.messageType === 'WHATSAPP' ||
+      (l.type === 'sms' && (l.from?.startsWith('whatsapp:') || l.to?.startsWith('whatsapp:')))
+    );
+
+    // 2. Build conversations Map grouped by remote contact phone number
+    const convMap = new Map();
+    let totalUnread = 0;
+
+    // First populate from existing address book contacts if they exist
+    state.contacts.forEach(c => {
+      const phoneClean = normalizePhone(c.phone);
+      if (phoneClean && !convMap.has(phoneClean)) {
+        convMap.set(phoneClean, {
+          id: 'conv_' + phoneClean,
+          phone_number: c.phone,
+          contact_name: c.name || 'Lead',
+          channel: 'WHATSAPP',
+          last_message: '',
+          last_updated_at: c.createdAt || new Date(0).toISOString(),
+          unread_count: parseInt(localStorage.getItem('wa_unread_' + phoneClean) || '0', 10),
+          messages: []
+        });
+      }
+    });
+
+    // Populate and group with actual message logs
+    waLogs.forEach(msg => {
+      const isOutbound = msg.direction === 'outbound';
+      const remotePhone = isOutbound ? msg.to : msg.from;
+      const cleanPhone = normalizePhone(remotePhone);
+      if (!cleanPhone) return;
+
+      const matchedContact = findContact(cleanPhone);
+      const contactName = matchedContact?.name || msg.contactName || msg.senderName || 'Prospect';
+
+      let conv = convMap.get(cleanPhone);
+      if (!conv) {
+        conv = {
+          id: 'conv_' + cleanPhone,
+          phone_number: remotePhone,
+          contact_name: contactName,
+          channel: 'WHATSAPP',
+          last_message: msg.content || msg.text || '',
+          last_updated_at: msg.timestamp || new Date().toISOString(),
+          unread_count: parseInt(localStorage.getItem('wa_unread_' + cleanPhone) || '0', 10),
+          messages: []
+        };
+        convMap.set(cleanPhone, conv);
+      }
+
+      // Add message to conversation's message list
+      conv.messages.push({
+        id: msg.id || ('msg_' + Date.now()),
+        conversation_id: conv.id,
+        direction: isOutbound ? 'outbound' : 'inbound',
+        body: msg.content || msg.text || '',
+        status: msg.status || (isOutbound ? 'delivered' : 'read'),
+        created_at: msg.timestamp || new Date().toISOString()
+      });
+
+      // Update latest message & timestamp if newer
+      if (!conv.last_updated_at || new Date(msg.timestamp) >= new Date(conv.last_updated_at)) {
+        conv.last_message = msg.content || msg.text || '';
+        conv.last_updated_at = msg.timestamp;
+      }
+    });
+
+    // Convert map to array and sort conversations by latest updated message timestamp descending
+    let convList = Array.from(convMap.values())
+      .filter(c => c.messages.length > 0 || c.phone_number === state.activeWaPhone)
+      .sort((a, b) => new Date(b.last_updated_at) - new Date(a.last_updated_at));
+
+    // Update global state
+    state.waConversations = convList;
+
+    // Filter by search query if any
+    const filterQuery = (els.waSearchInput?.value || '').trim().toLowerCase();
+    if (filterQuery) {
+      convList = convList.filter(c => 
+        (c.contact_name && c.contact_name.toLowerCase().includes(filterQuery)) ||
+        (c.phone_number && c.phone_number.toLowerCase().includes(filterQuery)) ||
+        (c.last_message && c.last_message.toLowerCase().includes(filterQuery))
+      );
+    }
+
+    // Render badge count in WhatsApp tab button
+    convList.forEach(c => { totalUnread += (c.unread_count || 0); });
+    if (els.waUnreadTotalBadge) {
+      if (totalUnread > 0) {
+        els.waUnreadTotalBadge.textContent = totalUnread;
+        els.waUnreadTotalBadge.classList.remove('hidden');
+      } else {
+        els.waUnreadTotalBadge.classList.add('hidden');
+      }
+    }
+
+    // Render HTML for Conversations Table in left sidebar
+    if (convList.length === 0) {
+      els.waConversationsList.innerHTML = `
+        <div style="padding: 24px 16px; text-align: center; color: var(--text-dim); font-size: 0.78rem;">
+          No WhatsApp chats yet.<br>Click <strong>New</strong> above to start chatting with any phone number!
+        </div>
+      `;
+      return;
+    }
+
+    els.waConversationsList.innerHTML = convList.map(conv => {
+      const initials = (conv.contact_name || 'W').split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+      const isActive = normalizePhone(conv.phone_number) === normalizePhone(state.activeWaPhone);
+      const timeStr = formatDisplayTime(conv.last_updated_at);
+      const unreadBadge = (conv.unread_count > 0 && !isActive) 
+        ? `<span class="wa-unread-badge">${conv.unread_count}</span>` 
+        : '';
+
+      return `
+        <div class="wa-conv-item ${isActive ? 'active' : ''}" data-phone="${escapeHtml(conv.phone_number)}">
+          <div class="wa-avatar">${initials}</div>
+          <div class="wa-conv-info">
+            <div class="wa-conv-top">
+              <span class="wa-conv-name">${escapeHtml(conv.contact_name)}</span>
+              <span class="wa-conv-time">${timeStr}</span>
+            </div>
+            <div class="wa-conv-bottom">
+              <span class="wa-conv-preview">${escapeHtml(conv.last_message || conv.phone_number)}</span>
+              ${unreadBadge}
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Attach click listeners to open conversation
+    els.waConversationsList.querySelectorAll('.wa-conv-item').forEach(item => {
+      item.addEventListener('click', () => {
+        openWhatsAppChat(item.dataset.phone);
+      });
+    });
+
+    // If an active chat is already selected, re-render its messages window
+    if (state.activeWaPhone) {
+      renderActiveWhatsAppThread();
+    }
+  }
+
+  // Open a specific conversation thread
+  function openWhatsAppChat(phone) {
+    if (!phone) return;
+    state.activeWaPhone = phone;
+    const cleanPhone = normalizePhone(phone);
+
+    // Clear unread count for this contact
+    localStorage.removeItem('wa_unread_' + cleanPhone);
+
+    // Highlight selected item in list
+    els.waConversationsList?.querySelectorAll('.wa-conv-item').forEach(item => {
+      item.classList.toggle('active', normalizePhone(item.dataset.phone) === cleanPhone);
+    });
+
+    // Update active chat header
+    const matched = findContact(phone);
+    const conv = state.waConversations.find(c => normalizePhone(c.phone_number) === cleanPhone);
+    const contactName = matched?.name || conv?.contact_name || 'Prospect';
+    const initials = contactName.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+
+    if (els.waNoChatSelected) els.waNoChatSelected.classList.add('hidden');
+    if (els.waActiveChatView) els.waActiveChatView.classList.remove('hidden');
+
+    if (els.waHeaderAvatar) els.waHeaderAvatar.textContent = initials;
+    if (els.waHeaderName) els.waHeaderName.textContent = contactName;
+    if (els.waHeaderPhone) els.waHeaderPhone.textContent = phone;
+
+    renderActiveWhatsAppThread();
+    if (els.waMessageInput) {
+      els.waMessageInput.focus();
+    }
+  }
+
+  // Render the messages table for the active chat window
+  function renderActiveWhatsAppThread() {
+    if (!state.activeWaPhone || !els.waMessagesThread) return;
+
+    const cleanActivePhone = normalizePhone(state.activeWaPhone);
+    // Find conversation or extract messages from state.logs
+    const conv = state.waConversations.find(c => normalizePhone(c.phone_number) === cleanActivePhone);
+
+    let messages = conv ? [...conv.messages] : [];
+
+    // Sort chronologically ascending for chat view
+    messages.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+    if (messages.length === 0) {
+      els.waMessagesThread.innerHTML = `
+        <div style="margin: auto; text-align: center; color: var(--text-dim); font-size: 0.8rem; padding: 20px;">
+          No messages with ${escapeHtml(state.activeWaPhone)} yet.<br>Send a message below to start the WhatsApp conversation!
+        </div>
+      `;
+      return;
+    }
+
+    els.waMessagesThread.innerHTML = messages.map(m => {
+      const timeStr = formatDisplayTime(m.created_at);
+      const isOutbound = m.direction === 'outbound';
+      const statusTick = isOutbound ? '<span class="wa-status-ticks">✓✓</span>' : '';
+
+      return `
+        <div class="wa-bubble ${m.direction}">
+          <div class="wa-bubble-text">${escapeHtml(m.body)}</div>
+          <div class="wa-bubble-meta">
+            <span>${timeStr}</span>
+            ${statusTick}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Scroll to bottom of message thread
+    els.waMessagesThread.scrollTop = els.waMessagesThread.scrollHeight;
+  }
+
+  // Send WhatsApp message to active contact
+  async function sendWhatsAppMessage() {
+    const to = state.activeWaPhone;
+    const text = els.waMessageInput?.value.trim();
+
+    if (!to) {
+      showToast('No Contact', 'Please select or enter a contact number to send WhatsApp.');
+      return;
+    }
+    if (!text) {
+      showToast('Empty Message', 'Please enter a message to send.');
+      els.waMessageInput?.focus();
+      return;
+    }
+
+    if (els.btnSendWhatsApp) {
+      els.btnSendWhatsApp.disabled = true;
+      els.btnSendWhatsApp.innerHTML = '<span>...</span>';
+    }
+
+    try {
+      const res = await fetch('/api/whatsapp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to, text })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to send WhatsApp message via Telnyx');
+      }
+
+      showToast('WhatsApp Sent', `Message delivered to ${to}`);
+      if (els.waMessageInput) els.waMessageInput.value = '';
+
+      // Immediately fetch logs and update chat view
+      await fetchLogs();
+      renderWhatsAppConversations();
+    } catch (err) {
+      console.error('Send WhatsApp error:', err);
+      showToast('WhatsApp Failed', err.message);
+    } finally {
+      if (els.btnSendWhatsApp) {
+        els.btnSendWhatsApp.disabled = false;
+        els.btnSendWhatsApp.innerHTML = `
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          <span>Send</span>
+        `;
+      }
+    }
+  }
+
+  // WhatsApp Event Listeners
+  if (els.btnSendWhatsApp) {
+    els.btnSendWhatsApp.addEventListener('click', sendWhatsAppMessage);
+  }
+
+  if (els.waMessageInput) {
+    els.waMessageInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendWhatsAppMessage();
+      }
+    });
+  }
+
+  if (els.waSearchInput) {
+    els.waSearchInput.addEventListener('input', renderWhatsAppConversations);
+  }
+
+  // New Chat Drawer toggles
+  if (els.btnNewWaChat) {
+    els.btnNewWaChat.addEventListener('click', () => {
+      els.waNewChatDrawer?.classList.toggle('hidden');
+      if (!els.waNewChatDrawer?.classList.contains('hidden')) {
+        els.waNewChatPhone?.focus();
+      }
+    });
+  }
+
+  if (els.btnCancelWaChatDrawer) {
+    els.btnCancelWaChatDrawer.addEventListener('click', () => {
+      els.waNewChatDrawer?.classList.add('hidden');
+    });
+  }
+
+  if (els.btnStartWaChatConfirm) {
+    els.btnStartWaChatConfirm.addEventListener('click', () => {
+      const raw = els.waNewChatPhone?.value.trim();
+      if (!raw) {
+        showToast('Number Required', 'Enter phone number with country code e.g. +1234567890');
+        return;
+      }
+      const defaultCountry = els.countryCodeSelect ? els.countryCodeSelect.value : '+1';
+      const full = raw.startsWith('+') ? raw : `${defaultCountry}${raw}`;
+      els.waNewChatDrawer?.classList.add('hidden');
+      if (els.waNewChatPhone) els.waNewChatPhone.value = '';
+      openWhatsAppChat(full);
+      renderWhatsAppConversations();
+    });
+  }
+
+  // Quick call/sms buttons inside WhatsApp active chat header
+  if (els.btnCallWaContact) {
+    els.btnCallWaContact.addEventListener('click', () => {
+      if (!state.activeWaPhone) return;
+      els.phoneNumberInput.value = state.activeWaPhone;
+      checkMatchedContact();
+      switchToTab('panel-dialer');
+      initiateCall(state.activeWaPhone);
+    });
+  }
+
+  if (els.btnSmsWaContact) {
+    els.btnSmsWaContact.addEventListener('click', () => {
+      if (!state.activeWaPhone) return;
+      els.smsRecipientInput.value = state.activeWaPhone;
+      switchSubTab('tab-sms');
+    });
+  }
+
+  // Simulate WhatsApp button
+  if (els.btnSimWa) {
+    els.btnSimWa.addEventListener('click', async () => {
+      try {
+        showToast('Simulating WhatsApp', 'Generating inbound WhatsApp message...');
+        await fetch('/api/whatsapp/simulate-incoming', { method: 'POST' });
+      } catch (e) {
+        console.warn('Simulate WA error:', e);
+      }
+    });
+  }
 
   // =========================================================================
   // CALL RECORDING AUDIO PLAYER
@@ -1312,7 +1730,7 @@
   }
 
   function renderSmsFeed() {
-    const smsLogs = state.logs.filter(l => l.type === 'sms');
+    const smsLogs = state.logs.filter(l => l.type === 'sms' && l.channel !== 'WHATSAPP');
     if (smsLogs.length === 0) {
       els.smsMessageList.innerHTML = '<div class="empty-placeholder" style="padding:20px;text-align:center;color:var(--text-dim);font-size:0.8rem;">No SMS messages yet. Send an outreach SMS above!</div>';
       return;
@@ -1596,6 +2014,7 @@
       const res = await fetch('/api/logs');
       state.logs = await res.json();
       renderActivityLogs();
+      renderWhatsAppConversations();
     } catch (e) {
       console.warn('Logs fetch error:', e);
     }
@@ -1652,6 +2071,11 @@
     fetchContacts();
     fetchLogs();
     fetchRecordings();
+
+    // Re-query tabButtons to ensure dynamically added tabs like WhatsApp are registered
+    document.querySelectorAll('.card-tab-nav .tab-item').forEach(btn => {
+      btn.addEventListener('click', () => switchSubTab(btn.dataset.content));
+    });
 
     // Check WebRTC credentials and auto-connect if configured
     fetch('/api/webrtc/credentials')
