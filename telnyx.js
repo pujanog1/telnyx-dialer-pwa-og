@@ -264,6 +264,75 @@ class TelnyxClient {
   }
 
   /**
+   * Send an approved WhatsApp Template message via Telnyx Messaging v2 API
+   * Uses payload structure: whatsapp_message -> template -> { name, language, components }
+   */
+  async sendWhatsAppTemplate({ to, from, templateName, language = 'en_US', components = [], previewText = '' }) {
+    const sender = from || this.fromNumber;
+
+    if (!this.isConfigured()) {
+      console.log(`[Telnyx Simulator] Simulating WhatsApp Template "${templateName}" to ${to} from ${sender}`);
+      return {
+        success: true,
+        mode: 'simulated',
+        id: 'sim_wa_tpl_' + Math.random().toString(36).substring(2, 9),
+        to,
+        from: sender,
+        template: templateName,
+        type: 'WHATSAPP',
+        status: 'delivered',
+        created_at: new Date().toISOString()
+      };
+    }
+
+    try {
+      const payload = {
+        to,
+        from: sender,
+        whatsapp_message: {
+          type: 'template',
+          template: {
+            name: templateName,
+            language: {
+              code: language,
+              policy: 'deterministic'
+            },
+            components: components
+          }
+        }
+      };
+
+      if (process.env.TELNYX_MESSAGING_PROFILE_ID) {
+        payload.messaging_profile_id = process.env.TELNYX_MESSAGING_PROFILE_ID;
+      }
+
+      const response = await fetch(`${TELNYX_API_BASE}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.errors?.[0]?.detail || `Telnyx WhatsApp Template error ${response.status}: ${JSON.stringify(data)}`);
+      }
+
+      return {
+        success: true,
+        mode: 'live',
+        ...data.data
+      };
+    } catch (err) {
+      console.error('[Telnyx API Error] sendWhatsAppTemplate failed:', err.message);
+      throw err;
+    }
+  }
+
+  /**
    * Transfer an active call to another phone number or SIP URI
    * Telnyx Call Control v2: POST /calls/{call_control_id}/actions/transfer
    */

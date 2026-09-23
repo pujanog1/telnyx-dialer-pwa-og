@@ -610,6 +610,92 @@ app.post('/api/whatsapp/send', async (req, res) => {
   }
 });
 
+// 5c. Send WhatsApp Approved Template
+app.post('/api/send-whatsapp-template', async (req, res) => {
+  const { to, templateName, language = 'en_US', variables = {}, from } = req.body;
+  if (!to || !templateName) {
+    return res.status(400).json({ error: 'Recipient phone (to) and templateName are required' });
+  }
+
+  const fromNumber = from || process.env.TELNYX_PHONE_NUMBER || '+12065960776';
+  const contact = findContactByPhone(to);
+
+  // Format variables into Telnyx/Meta components -> parameters structure
+  // Components: [{ type: "body", parameters: [{ type: "text", text: "val1" }, ...] }]
+  let parameters = [];
+  let summaryText = `[Template: ${templateName}]`;
+
+  if (Array.isArray(variables)) {
+    parameters = variables.map(v => ({ type: 'text', text: String(v || '') }));
+    summaryText += ` (${variables.join(', ')})`;
+  } else if (variables && typeof variables === 'object') {
+    const vals = Object.values(variables);
+    parameters = vals.map(v => ({ type: 'text', text: String(v || '') }));
+    summaryText += ` (${vals.join(', ')})`;
+  }
+
+  const components = parameters.length > 0 ? [
+    {
+      type: 'body',
+      parameters
+    }
+  ] : [];
+
+  try {
+    const result = await telnyx.sendWhatsAppTemplate({
+      to,
+      from: fromNumber,
+      templateName,
+      language,
+      components
+    });
+
+    const logEntry = appendLog({
+      type: 'sms',
+      direction: 'outbound',
+      from: fromNumber,
+      to,
+      contactName: contact ? contact.name : 'Unknown Contact',
+      company: contact ? contact.company : '',
+      status: 'delivered',
+      content: summaryText,
+      text: summaryText,
+      channel: 'WHATSAPP',
+      messageType: 'WHATSAPP',
+      template: templateName
+    });
+
+    if (contact) {
+      const contacts = readJson(CONTACTS_FILE, []);
+      const idx = contacts.findIndex(c => c.id === contact.id);
+      if (idx !== -1) {
+        contacts[idx].lastContacted = new Date().toISOString();
+        writeJson(CONTACTS_FILE, contacts);
+      }
+    }
+
+    // Broadcast live to UI
+    broadcast('incoming_sms', {
+      id: logEntry.id,
+      from: fromNumber,
+      to,
+      senderName: 'You',
+      company: contact ? contact.company : '',
+      text: summaryText,
+      content: summaryText,
+      direction: 'outbound',
+      channel: 'WHATSAPP',
+      type: 'WHATSAPP',
+      timestamp: new Date().toISOString()
+    });
+
+    res.json({ success: true, result, log: logEntry });
+  } catch (err) {
+    console.error('Send WhatsApp Template error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 6. Interactive Simulators (for immediate test verification)
 app.post('/api/call/simulate-incoming', (req, res) => {
   const contacts = readJson(CONTACTS_FILE, []);

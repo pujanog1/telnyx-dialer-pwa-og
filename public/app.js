@@ -120,11 +120,18 @@
     waHeaderAvatar: document.getElementById('waHeaderAvatar'),
     waHeaderName: document.getElementById('waHeaderName'),
     waHeaderPhone: document.getElementById('waHeaderPhone'),
+    btnWaSaveToCrm: document.getElementById('btnWaSaveToCrm'),
     btnCallWaContact: document.getElementById('btnCallWaContact'),
     btnSmsWaContact: document.getElementById('btnSmsWaContact'),
     waMessagesThread: document.getElementById('waMessagesThread'),
     waMessageInput: document.getElementById('waMessageInput'),
     btnSendWhatsApp: document.getElementById('btnSendWhatsApp'),
+    btnOpenWaTemplate: document.getElementById('btnOpenWaTemplate'),
+    waTemplateDrawer: document.getElementById('waTemplateDrawer'),
+    btnCloseWaTemplateDrawer: document.getElementById('btnCloseWaTemplateDrawer'),
+    waTemplateSelect: document.getElementById('waTemplateSelect'),
+    waTemplateFieldsContainer: document.getElementById('waTemplateFieldsContainer'),
+    btnSendWaTemplateSubmit: document.getElementById('btnSendWaTemplateSubmit'),
 
     // Recordings Tab
     recordingsList: document.getElementById('recordingsList'),
@@ -1365,6 +1372,18 @@
     });
   }
 
+  // Save to CRM button in WhatsApp header
+  if (els.btnWaSaveToCrm) {
+    els.btnWaSaveToCrm.addEventListener('click', () => {
+      const prospectPhone = state.activeWaPhone || els.waHeaderPhone?.textContent || '';
+      if (!prospectPhone) {
+        showToast('No Phone', 'No active prospect phone number to save.');
+        return;
+      }
+      openAddContactModal(prospectPhone);
+    });
+  }
+
   // Quick call/sms buttons inside WhatsApp active chat header
   if (els.btnCallWaContact) {
     els.btnCallWaContact.addEventListener('click', () => {
@@ -1382,6 +1401,161 @@
       els.smsRecipientInput.value = state.activeWaPhone;
       switchSubTab('tab-sms');
     });
+  }
+
+  // =========================================================================
+  // WHATSAPP APPROVED TEMPLATES CONTROLLER
+  // =========================================================================
+  const WA_TEMPLATES_CONFIG = {
+    heavy_recovery_dispatch: {
+      name: 'heavy_recovery_dispatch',
+      language: 'en_US',
+      fields: [
+        { key: 'location', label: '1. Incident Location', placeholder: 'e.g. I-95 Mile 42 Northbound' },
+        { key: 'vehicle', label: '2. Vehicle Description', placeholder: 'e.g. 2021 Freightliner Cascadia' },
+        { key: 'status', label: '3. Current Status', placeholder: 'e.g. Rollover / Lane Blocked' },
+        { key: 'hazmat', label: '4. Hazmat Details', placeholder: 'e.g. None / Diesel Spill Contained' },
+        { key: 'callback', label: '5. Dispatch Callback #', placeholder: 'e.g. +1-800-555-0199' }
+      ]
+    },
+    ai_demo_followup: {
+      name: 'ai_demo_followup',
+      language: 'en_US',
+      fields: [
+        { key: 'name', label: '1. Contact Name', placeholder: 'e.g. John Doe' },
+        { key: 'demoNumber', label: '2. Demo Reference / Number', placeholder: 'e.g. DEMO-8492' }
+      ]
+    }
+  };
+
+  if (els.btnOpenWaTemplate) {
+    els.btnOpenWaTemplate.addEventListener('click', () => {
+      if (!state.activeWaPhone) {
+        showToast('Select Chat', 'Select a WhatsApp conversation or click "New" first.');
+        return;
+      }
+      els.waTemplateDrawer?.classList.toggle('hidden');
+    });
+  }
+
+  if (els.btnCloseWaTemplateDrawer) {
+    els.btnCloseWaTemplateDrawer.addEventListener('click', () => {
+      els.waTemplateDrawer?.classList.add('hidden');
+    });
+  }
+
+  if (els.waTemplateSelect) {
+    els.waTemplateSelect.addEventListener('change', (e) => {
+      const selected = e.target.value;
+      renderTemplateFields(selected);
+    });
+  }
+
+  function renderTemplateFields(templateName) {
+    if (!els.waTemplateFieldsContainer) return;
+    const config = WA_TEMPLATES_CONFIG[templateName];
+
+    if (!config) {
+      els.waTemplateFieldsContainer.innerHTML = '';
+      if (els.btnSendWaTemplateSubmit) els.btnSendWaTemplateSubmit.disabled = true;
+      return;
+    }
+
+    // Prefill name if available
+    const matched = findContact(state.activeWaPhone);
+    const contactName = matched?.name || '';
+
+    els.waTemplateFieldsContainer.innerHTML = config.fields.map(f => {
+      let initialVal = '';
+      if (f.key === 'name' && contactName) initialVal = contactName;
+      if (f.key === 'callback') initialVal = els.currentFromNumber?.textContent || '';
+
+      return `
+        <div class="wa-template-field-group">
+          <label for="wa_field_${f.key}">${f.label}</label>
+          <input type="text" id="wa_field_${f.key}" data-key="${f.key}" value="${escapeHtml(initialVal)}" placeholder="${escapeHtml(f.placeholder)}" required autocomplete="off">
+        </div>
+      `;
+    }).join('');
+
+    if (els.btnSendWaTemplateSubmit) {
+      els.btnSendWaTemplateSubmit.disabled = false;
+    }
+  }
+
+  async function handleSendWaTemplate() {
+    const to = state.activeWaPhone;
+    const templateName = els.waTemplateSelect?.value;
+    const config = WA_TEMPLATES_CONFIG[templateName];
+
+    if (!to) {
+      showToast('No Recipient', 'Please select or enter a recipient phone number.');
+      return;
+    }
+    if (!config) {
+      showToast('Choose Template', 'Please select an approved WhatsApp template.');
+      return;
+    }
+
+    // Collect all input values in ordered parameters list
+    const fieldInputs = els.waTemplateFieldsContainer.querySelectorAll('input');
+    const variables = [];
+    let hasEmpty = false;
+
+    fieldInputs.forEach(input => {
+      const val = input.value.trim();
+      if (!val) hasEmpty = true;
+      variables.push(val);
+    });
+
+    if (hasEmpty) {
+      showToast('Missing Fields', 'Please fill in all variable fields for this template.');
+      return;
+    }
+
+    if (els.btnSendWaTemplateSubmit) {
+      els.btnSendWaTemplateSubmit.disabled = true;
+      els.btnSendWaTemplateSubmit.innerHTML = '<span>Sending Template...</span>';
+    }
+
+    try {
+      const res = await fetch('/api/send-whatsapp-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to,
+          templateName,
+          language: config.language || 'en_US',
+          variables
+        })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to send template message via Telnyx');
+      }
+
+      showToast('Template Sent!', `Delivered template "${templateName}" to ${to}`);
+      els.waTemplateDrawer?.classList.add('hidden');
+      if (els.waTemplateSelect) els.waTemplateSelect.value = '';
+      if (els.waTemplateFieldsContainer) els.waTemplateFieldsContainer.innerHTML = '';
+
+      // Immediately reload logs and render updated messages in chat window
+      await fetchLogs();
+      renderWhatsAppConversations();
+    } catch (err) {
+      console.error('Send Template Error:', err);
+      showToast('Template Error', err.message);
+    } finally {
+      if (els.btnSendWaTemplateSubmit) {
+        els.btnSendWaTemplateSubmit.disabled = false;
+        els.btnSendWaTemplateSubmit.innerHTML = '<span>Send Template</span>';
+      }
+    }
+  }
+
+  if (els.btnSendWaTemplateSubmit) {
+    els.btnSendWaTemplateSubmit.addEventListener('click', handleSendWaTemplate);
   }
 
   // Simulate WhatsApp button
@@ -1613,12 +1787,19 @@
     });
   }
 
-  function openAddContactModal() {
+  function openAddContactModal(initialPhone = '') {
     els.editContactId.value = '';
     els.contactModalTitle.textContent = 'Add New Outreach Lead';
     els.contactForm.reset();
+    if (initialPhone) {
+      els.contactFormPhone.value = initialPhone;
+    }
     els.contactModal.classList.remove('hidden');
-    els.contactFormName.focus();
+    if (initialPhone) {
+      els.contactFormName.focus();
+    } else {
+      els.contactFormName.focus();
+    }
   }
 
   function openEditContactModal(id) {

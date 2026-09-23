@@ -386,6 +386,10 @@
                     </div>
                   </div>
                   <div class="wa-header-actions">
+                    <button id="btnWaSaveToCrm" class="btn btn-primary btn-xs" title="Save this prospect to CRM Leads">
+                      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                      <span>Save to CRM</span>
+                    </button>
                     <button id="btnCallWaContact" class="btn btn-ghost btn-xs" title="Call this contact via Dialer">
                       <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
                       <span>Call</span>
@@ -402,8 +406,33 @@
                   <!-- Rendered dynamically -->
                 </div>
 
+                <!-- WhatsApp Template Selector & Form Drawer -->
+                <div id="waTemplateDrawer" class="wa-template-drawer hidden">
+                  <div class="wa-template-drawer-header">
+                    <span class="wa-template-title">Select Meta Approved Template</span>
+                    <button id="btnCloseWaTemplateDrawer" class="btn-close-modal">&times;</button>
+                  </div>
+                  <div class="wa-template-select-row">
+                    <select id="waTemplateSelect">
+                      <option value="">-- Choose Approved Template --</option>
+                      <option value="heavy_recovery_dispatch">heavy_recovery_dispatch (5 variables)</option>
+                      <option value="ai_demo_followup">ai_demo_followup (2 variables)</option>
+                    </select>
+                  </div>
+                  <div id="waTemplateFieldsContainer" class="wa-template-fields"></div>
+                  <div class="wa-template-actions">
+                    <button id="btnSendWaTemplateSubmit" class="btn btn-wa-send btn-sm" disabled>
+                      <span>Send Template</span>
+                    </button>
+                  </div>
+                </div>
+
                 <!-- WhatsApp Message Composer -->
                 <div class="wa-composer-box">
+                  <button id="btnOpenWaTemplate" class="btn btn-secondary btn-sm btn-tpl-trigger" title="Send Approved Meta Template">
+                    <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    <span>Send Template</span>
+                  </button>
                   <textarea id="waMessageInput" rows="2" placeholder="Type a WhatsApp message... (Press Enter to Send)"></textarea>
                   <button id="btnSendWhatsApp" class="btn btn-wa-send" title="Send WhatsApp Message">
                     <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>

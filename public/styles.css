@@ -2066,16 +2066,117 @@ body {
   box-shadow: 0 0 0 1px rgba(37, 211, 102, 0.5);
 }
 
+.btn-tpl-trigger {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(37, 211, 102, 0.4);
+  color: var(--whatsapp-green);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+}
+.btn-tpl-trigger:hover {
+  background: rgba(37, 211, 102, 0.15);
+  border-color: var(--whatsapp-green);
+  color: #fff;
+}
+
+/* WhatsApp Template Drawer */
+.wa-template-drawer {
+  background: #182229;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 12px 14px;
+  animation: slideDown 0.2s ease-out;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.wa-template-drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.wa-template-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--whatsapp-green);
+}
+
+.wa-template-select-row select {
+  width: 100%;
+  background: #202c33;
+  color: #e9edef;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  outline: none;
+}
+
+.wa-template-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.wa-template-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.wa-template-field-group label {
+  font-size: 0.68rem;
+  color: #8696a0;
+  font-weight: 600;
+}
+
+.wa-template-field-group input {
+  background: #202c33;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-size: 0.75rem;
+  color: #fff;
+  outline: none;
+}
+.wa-template-field-group input:focus {
+  border-color: var(--whatsapp-green);
+}
+
+.wa-template-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
 .btn-wa-send {
   background: var(--whatsapp-green);
   color: #0b141a;
   border: none;
   font-weight: 700;
   padding: 8px 14px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: var(--transition-fast);
 }
 .btn-wa-send:hover {
   background: #1ebd5b;
 }
+.btn-wa-send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 
 @media (max-width: 900px) {
   .wa-container {
