@@ -447,27 +447,55 @@ let activeConference = null;
 const pendingThreeWayBridges = new Map(); // Kept as fallback
 const webrtcSessions = new Map(); // sessionId → call_control_id (populated from webhooks)
 
+let latestOutboundCallControlId = null;
+let pendingThreeWayCall = false;
+
+async function telnyxRequest(endpoint, body = {}) {
+  const apiKey = process.env.TELNYX_API_KEY;
+  const url = `https://api.telnyx.com/v2/${endpoint.replace(/^\//, '')}`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify(body)
+  });
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData.errors?.[0]?.detail || `Telnyx API error ${response.status}`);
+  }
+  return await response.json();
+}
+
 app.post('/api/call/three-way', async (req, res) => {
+  pendingThreeWayCall = true; // Signal webhook to NOT auto-unpark — we'll handle it
   const { sessionId, to, from } = req.body;
   if (!to) {
+    pendingThreeWayCall = false;
     return res.status(400).json({ error: 'Third party phone number is required for 3-Way Call' });
   }
   if (!sessionId) {
+    pendingThreeWayCall = false;
     return res.status(400).json({ error: 'sessionId is required for 3-Way Call' });
   }
 
-  // Look up the real call_control_id from the webhook-populated map
-  const callControlId = webrtcSessions.get(sessionId);
+  // Look up real call_control_id: from session map, then fall back to latest outbound
+  const callControlId = webrtcSessions.get(sessionId) || latestOutboundCallControlId;
   console.log('[3-WAY] sessionId:', sessionId);
   console.log('[3-WAY] webrtcSessions Map size:', webrtcSessions.size);
-  console.log('[3-WAY] callControlId from map:', callControlId);
+  console.log('[3-WAY] callControlId from session map:', webrtcSessions.get(sessionId));
+  console.log('[3-WAY] latestOutboundCallControlId:', latestOutboundCallControlId);
+  console.log('[3-WAY] Final callControlId used:', callControlId);
   console.log('[3-WAY] Is v2 format?', callControlId?.startsWith('v2:'));
 
   if (!callControlId) {
+    pendingThreeWayCall = false;
     return res.status(400).json({
       error: 'WebRTC session not found. Make sure your call is active and the webhook has been received.',
       sessionId,
-      mapSize: webrtcSessions.size
+      mapSize: webrtcSessions.size,
+      latestOutboundCallControlId
     });
   }
 
@@ -563,6 +591,7 @@ app.post('/api/call/three-way', async (req, res) => {
       }, 1500);
     }
 
+    pendingThreeWayCall = false;
     res.json({
       success: true,
       conferenceId,
@@ -571,12 +600,14 @@ app.post('/api/call/three-way', async (req, res) => {
       message: `Conference created (${conferenceId}). Dialing third party ${to}...`
     });
   } catch (err) {
+    pendingThreeWayCall = false;
     console.error('3-Way Conference error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
 // Endpoint to end 3-Way (hangs up only the third party)
+
 app.post('/api/call/end-three-way', async (req, res) => {
   if (!activeConference || !activeConference.newCallId) {
     return res.json({ success: true, message: 'No active 3rd party in conference' });
@@ -1137,20 +1168,40 @@ app.post('/webhook', (req, res) => {
 
   console.log(`[Telnyx Webhook Event] ${event}`);
 
-  // ── WebRTC Session Mapping ──────────────────────────────────────────────────
-  // Capture call_control_id (v2:...) from webhook custom headers so we can
-  // use it for Conference API calls (browser SDK only gives us a UUID).
+  // ── WebRTC Session Mapping + Parked Call Handling ─────────────────────────
   if (event === 'call.initiated' || event === 'call.answered') {
     const callControlId = payload.call_control_id;
+    const direction     = payload.direction;
+    const callState     = payload.state;
     const customHeaders = payload.custom_headers || [];
     const sessionHeader = customHeaders.find(h => h.name === 'X-Client-Session-ID');
+
+    console.log('[WEBHOOK] event:', event, '| dir:', direction,
+                '| state:', callState, '| id:', callControlId);
+
+    // Map sessionId → call_control_id for 3-Way lookup
     if (sessionHeader && callControlId) {
       webrtcSessions.set(sessionHeader.value, callControlId);
       console.log('[WEBRTC MAP] sessionId =', sessionHeader.value, '→ call_control_id =', callControlId);
       console.log('[WEBRTC MAP] Map size:', webrtcSessions.size);
     }
+
+    // Capture every outbound call_control_id as the latest (for 3-Way fallback)
+    if (event === 'call.initiated' && (direction === 'outgoing' || direction === 'outbound')) {
+      latestOutboundCallControlId = callControlId;
+      console.log('[PARKED] Captured outbound call_control_id:', callControlId);
+
+      // Auto-unpark for normal calls (not when 3-Way flow is active)
+      if (!pendingThreeWayCall && callState === 'parked') {
+        console.log('[UNPARK] Answering normal parked call:', callControlId);
+        telnyx.answerCall(callControlId)
+          .then(() => console.log('[UNPARK] Success — call connected'))
+          .catch(err => console.error('[UNPARK] Error:', err.message));
+      }
+    }
   }
   // ───────────────────────────────────────────────────────────────────────────
+
 
   if (event === 'call.answered') {
     const answeredCallId = payload.call_control_id;
