@@ -26,7 +26,9 @@
     webrtcConfig: null,
     activeWaPhone: null,
     waConversations: [],
-    waMessages: []
+    waMessages: [],
+    activeConferenceId: null,
+    activeConferenceNewCallId: null
   };
 
   // DTMF Standard Frequencies (Hz)
@@ -85,6 +87,7 @@
     btnKeypadToggle: document.getElementById('btnKeypadToggle'),
     btnTransferCall: document.getElementById('btnTransferCall'),
     btnThreeWayCall: document.getElementById('btnThreeWayCall'),
+    btnEndThreeWayCall: document.getElementById('btnEndThreeWayCall'),
     btnEndCall: document.getElementById('btnEndCall'),
     btnEndCallText: document.getElementById('btnEndCallText'),
 
@@ -523,6 +526,10 @@
         console.log('[Telnyx WebRTC Notification]', notification);
         if (notification.type === 'callUpdate' && notification.call) {
           const callState = notification.call.state;
+          const legId = notification.call.telnyxLegId || notification.call.id || notification.call.options?.callId;
+          if (legId && state.activeCall) {
+            state.activeCall.callControlId = legId;
+          }
           if (callState === 'ringing') {
             els.callStatusBadge.textContent = 'Ringing...';
             els.callStatusBadge.style.color = 'var(--accent-sky)';
@@ -566,6 +573,10 @@
     }
 
     els.activeCallHud.classList.add('hidden');
+    if (els.threeWayActiveBadge) els.threeWayActiveBadge.classList.add('hidden');
+    if (els.btnEndThreeWayCall) els.btnEndThreeWayCall.classList.add('hidden');
+    state.activeConferenceId = null;
+    state.activeConferenceNewCallId = null;
     state.activeCall = null;
     state.webrtcCall = null;
     state.callDurationSeconds = 0;
@@ -727,6 +738,10 @@
     }
 
     els.activeCallHud.classList.add('hidden');
+    if (els.threeWayActiveBadge) els.threeWayActiveBadge.classList.add('hidden');
+    if (els.btnEndThreeWayCall) els.btnEndThreeWayCall.classList.add('hidden');
+    state.activeConferenceId = null;
+    state.activeConferenceNewCallId = null;
     state.activeCall = null;
     state.callDurationSeconds = 0;
     updateCallTimerDisplay();
@@ -887,7 +902,12 @@
     }
 
     try {
-      const activeCallId = state.activeCall.callControlId || state.activeCall.id || ('call_' + Date.now());
+      const activeCallId = state.activeCall.callControlId || 
+                           state.webrtcCall?.telnyxLegId || 
+                           state.webrtcCall?.id || 
+                           state.activeCall.id || 
+                           ('call_' + Date.now());
+
       const response = await fetch('/api/call/three-way', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -902,6 +922,10 @@
         throw new Error(data.error || 'Failed to initiate 3-Way call via Telnyx');
       }
 
+      state.activeConferenceId = data.conferenceId || null;
+      state.activeConferenceNewCallId = data.newCallId || null;
+      showToast('3-Way Initiated', `Conference created. Dialing ${targetPhone}...`);
+
       closeThreeWayModal();
       fetchLogs();
     } catch (err) {
@@ -910,6 +934,36 @@
       if (els.callStatusBadge) {
         els.callStatusBadge.textContent = 'Connected';
         els.callStatusBadge.style.color = 'var(--accent-emerald)';
+      }
+    }
+  }
+
+  async function endThreeWayCall() {
+    if (els.btnEndThreeWayCall) {
+      els.btnEndThreeWayCall.disabled = true;
+    }
+    showToast('Ending 3-Way', 'Disconnecting third party from conference...');
+    try {
+      const res = await fetch('/api/call/end-three-way', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to end 3-Way call');
+      }
+      showToast('3-Way Disconnected', 'Third party disconnected. Continuing 1-to-1 conversation.');
+      if (els.threeWayActiveBadge) els.threeWayActiveBadge.classList.add('hidden');
+      if (els.btnEndThreeWayCall) els.btnEndThreeWayCall.classList.add('hidden');
+      state.activeConferenceNewCallId = null;
+      if (els.callStatusBadge) {
+        els.callStatusBadge.textContent = 'Connected';
+        els.callStatusBadge.style.color = 'var(--accent-emerald)';
+      }
+      fetchLogs();
+    } catch (err) {
+      console.error('End 3-way error:', err);
+      showToast('End 3-Way Failed', err.message);
+    } finally {
+      if (els.btnEndThreeWayCall) {
+        els.btnEndThreeWayCall.disabled = false;
       }
     }
   }
@@ -926,28 +980,53 @@
         els.callStatusBadge.textContent = `Connecting ${data.thirdPartyNumber || '3rd Party'}...`;
         els.callStatusBadge.style.color = 'var(--accent-purple)';
       }
-      showToast('Connecting 3rd Party', `Dialing ${data.thirdPartyNumber || '3rd party'}...`);
+      showToast('Connecting 3rd Party', data.message || `Dialing ${data.thirdPartyNumber || '3rd party'}...`);
     } else if (data.status === 'three_way_active') {
+      state.activeConferenceId = data.conferenceId || state.activeConferenceId;
+      state.activeConferenceNewCallId = data.newCallId || state.activeConferenceNewCallId;
       if (els.callStatusBadge) {
-        els.callStatusBadge.textContent = '3-Way Call Active';
+        els.callStatusBadge.textContent = '3-WAY ACTIVE';
         els.callStatusBadge.style.color = 'var(--accent-purple)';
       }
       if (els.threeWayActiveBadge) {
         els.threeWayActiveBadge.classList.remove('hidden');
       }
-      showToast('3-Way Call Active', 'All parties connected in conference call');
+      if (els.btnEndThreeWayCall) {
+        els.btnEndThreeWayCall.classList.remove('hidden');
+      }
+      showToast('3-Way Call Active', data.message || 'Third party joined conference. Conference active.');
+      fetchLogs();
+    } else if (data.status === 'three_way_ended') {
+      if (els.threeWayActiveBadge) {
+        els.threeWayActiveBadge.classList.add('hidden');
+      }
+      if (els.btnEndThreeWayCall) {
+        els.btnEndThreeWayCall.classList.add('hidden');
+      }
+      state.activeConferenceNewCallId = null;
+      if (els.callStatusBadge) {
+        els.callStatusBadge.textContent = 'Connected';
+        els.callStatusBadge.style.color = 'var(--accent-emerald)';
+      }
+      showToast('3-Way Ended', data.message || 'Third party disconnected');
       fetchLogs();
     } else if (data.status === 'transferred') {
       showToast('Call Transferred', `Call routed to ${data.transferTo}`);
       stopCallTimer();
       els.activeCallHud.classList.add('hidden');
       if (els.threeWayActiveBadge) els.threeWayActiveBadge.classList.add('hidden');
+      if (els.btnEndThreeWayCall) els.btnEndThreeWayCall.classList.add('hidden');
+      state.activeConferenceId = null;
+      state.activeConferenceNewCallId = null;
       state.activeCall = null;
       fetchLogs();
     } else if (data.status === 'completed') {
       stopCallTimer();
       els.activeCallHud.classList.add('hidden');
       if (els.threeWayActiveBadge) els.threeWayActiveBadge.classList.add('hidden');
+      if (els.btnEndThreeWayCall) els.btnEndThreeWayCall.classList.add('hidden');
+      state.activeConferenceId = null;
+      state.activeConferenceNewCallId = null;
       state.activeCall = null;
       fetchRecordings();
       fetchLogs();
@@ -2145,6 +2224,10 @@
 
   if (els.threeWayForm) {
     els.threeWayForm.addEventListener('submit', executeThreeWay);
+  }
+
+  if (els.btnEndThreeWayCall) {
+    els.btnEndThreeWayCall.addEventListener('click', endThreeWayCall);
   }
 
   els.btnMuteCall.addEventListener('click', () => {

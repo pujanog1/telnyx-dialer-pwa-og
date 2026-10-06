@@ -596,6 +596,12 @@ body {
   color: var(--accent-purple);
 }
 
+.btn-hud-end-threeway:hover {
+  background: rgba(239, 68, 68, 0.25) !important;
+  border-color: #ef4444 !important;
+  color: #fff !important;
+}
+
 .btn-hud-hangup {
   background: var(--gradient-hangup);
   color: #fff;

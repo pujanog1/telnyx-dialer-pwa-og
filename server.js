@@ -442,8 +442,9 @@ app.post('/api/call/transfer', async (req, res) => {
   }
 });
 
-// Pending 3-Way bridge mapping: { bridgeCallId: originalCallId }
-const pendingThreeWayBridges = new Map();
+// Active 3-Way Conference state: { id, originalCallId, newCallId, thirdPartyNumber }
+let activeConference = null;
+const pendingThreeWayBridges = new Map(); // Kept as fallback
 
 app.post('/api/call/three-way', async (req, res) => {
   const { callControlId, to, from } = req.body;
@@ -455,19 +456,36 @@ app.post('/api/call/three-way', async (req, res) => {
   }
 
   const fromNumber = from || process.env.TELNYX_PHONE_NUMBER || '+12065960776';
-  const publicUrl = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
+  const publicUrl = (process.env.PUBLIC_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
 
   try {
-    const result = await telnyx.threeWayCall({
+    // 1. Create conference using the EXISTING WebRTC call leg
+    const confName = 'conf_' + Date.now();
+    console.log(`[3-Way Conference] Creating conference "${confName}" with call leg ${callControlId}...`);
+    const confResult = await telnyx.createConferenceWithCall({
+      callControlId,
+      name: confName
+    });
+
+    const conferenceId = confResult.id || confResult.conference_id;
+
+    // 2. Dial the third party as a NEW call
+    console.log(`[3-Way Conference] Dialing third party ${to}...`);
+    const dialResult = await telnyx.threeWayCall({
       to,
       from: fromNumber,
       webhookUrl: `${publicUrl}/webhook`
     });
 
-    const bridgeCallId = result.call_control_id;
+    const newCallId = dialResult.call_control_id;
 
-    // Track mapping so when bridgeCallId is answered, we bridge with callControlId (original call)
-    pendingThreeWayBridges.set(bridgeCallId, callControlId);
+    // 3. Store conference_id and calls in activeConference
+    activeConference = {
+      id: conferenceId,
+      originalCallId: callControlId,
+      newCallId,
+      thirdPartyNumber: to
+    };
 
     // Append activity log
     appendLog({
@@ -479,59 +497,106 @@ app.post('/api/call/three-way', async (req, res) => {
       company: '',
       status: 'connecting_3way',
       duration: 0,
-      content: `Connecting 3rd party (${to}) for 3-Way Conference Call`,
-      callControlId: bridgeCallId,
-      originalCallId: callControlId
+      content: `Third party dialed (${to}) for Conference ${confName}`,
+      callControlId: newCallId,
+      originalCallId: callControlId,
+      conferenceId
     });
 
     broadcast('call_status', {
       callControlId,
-      bridgeCallId,
+      conferenceId,
+      newCallId,
       status: 'three_way_connecting',
-      thirdPartyNumber: to
+      thirdPartyNumber: to,
+      message: 'Third party dialed...'
     });
 
-    // If running in simulator mode, automatically simulate the answer & bridge after a short delay
-    if (result.mode === 'simulated' || bridgeCallId.startsWith('sim_')) {
+    // If running in simulator mode, automatically simulate answer & participant joined
+    if (dialResult.mode === 'simulated' || String(newCallId).startsWith('sim_')) {
       setTimeout(async () => {
         try {
-          console.log(`[Telnyx Simulator] Auto-bridging simulated 3-way call ${callControlId} with ${bridgeCallId}`);
-          await telnyx.bridgeCall({ originalCallId: callControlId, newCallId: bridgeCallId });
-          pendingThreeWayBridges.delete(bridgeCallId);
+          console.log(`[Telnyx Simulator] Auto-joining simulated 3-way call ${newCallId} to conference ${conferenceId}`);
+          await telnyx.addParticipantToConference({ conferenceId, callControlId: newCallId });
 
           appendLog({
             type: 'call',
-            direction: 'bridge',
+            direction: 'conference',
             from: fromNumber,
             to,
             contactName: '3-Way Conference Active',
             company: '',
             status: 'three_way_active',
             duration: 0,
-            content: `3-Way Call bridged successfully with ${to}`,
-            callControlId
+            content: `Third party joined conference ${confName} (${to})`,
+            callControlId,
+            conferenceId
           });
 
           broadcast('call_status', {
             callControlId,
-            bridgeCallId,
+            conferenceId,
+            newCallId,
             status: 'three_way_active',
-            thirdPartyNumber: to
+            thirdPartyNumber: to,
+            message: 'Third party joined conference. Conference active.'
           });
         } catch (simErr) {
-          console.error('[Telnyx Simulator Error] 3-way auto-bridge failed:', simErr.message);
+          console.error('[Telnyx Simulator Error] 3-way conference auto-join failed:', simErr.message);
         }
       }, 1500);
     }
 
     res.json({
       success: true,
-      message: `Initiated 3-Way call to ${to}. Awaiting answer to bridge.`,
-      bridgeCallId,
-      originalCallId: callControlId
+      conferenceId,
+      newCallId,
+      originalCallId: callControlId,
+      message: `Conference created (${conferenceId}). Dialing third party ${to}...`
     });
   } catch (err) {
-    console.error('3-Way call error:', err.message);
+    console.error('3-Way Conference error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Endpoint to end 3-Way (hangs up only the third party)
+app.post('/api/call/end-three-way', async (req, res) => {
+  if (!activeConference || !activeConference.newCallId) {
+    return res.json({ success: true, message: 'No active 3rd party in conference' });
+  }
+
+  const { id: conferenceId, newCallId, originalCallId, thirdPartyNumber } = activeConference;
+
+  try {
+    await telnyx.leaveConferenceParticipant({ conferenceId, callControlId: newCallId });
+
+    appendLog({
+      type: 'call',
+      direction: 'outbound',
+      from: process.env.TELNYX_PHONE_NUMBER || '+12065960776',
+      to: thirdPartyNumber || '3rd Party',
+      contactName: '3-Way Ended',
+      company: '',
+      status: 'three_way_ended',
+      duration: 0,
+      content: `Third party (${thirdPartyNumber || newCallId}) disconnected from conference`,
+      callControlId: originalCallId,
+      conferenceId
+    });
+
+    broadcast('call_status', {
+      callControlId: originalCallId,
+      conferenceId,
+      status: 'three_way_ended',
+      message: 'Third party left conference'
+    });
+
+    activeConference.newCallId = null;
+
+    res.json({ success: true, message: 'Third party removed from conference' });
+  } catch (err) {
+    console.error('End 3-way error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1059,47 +1124,147 @@ app.post('/webhook', (req, res) => {
   if (event === 'call.answered') {
     const answeredCallId = payload.call_control_id;
 
-    // Check if this answered call is a pending 3-way third party call
-    if (answeredCallId && pendingThreeWayBridges.has(answeredCallId)) {
-      const originalCallId = pendingThreeWayBridges.get(answeredCallId);
-      pendingThreeWayBridges.delete(answeredCallId);
+    // Check if this answered call is the 3rd party in active conference
+    if (answeredCallId && activeConference && activeConference.newCallId === answeredCallId) {
+      console.log(`[Telnyx Webhook] 3-Way 3rd party answered. Adding ${answeredCallId} to conference ${activeConference.id}...`);
 
-      console.log(`[Telnyx Webhook] 3-Way call answered. Bridging ${originalCallId} with ${answeredCallId}...`);
-
-      telnyx.bridgeCall({ originalCallId, newCallId: answeredCallId })
+      telnyx.addParticipantToConference({
+        conferenceId: activeConference.id,
+        callControlId: answeredCallId
+      })
         .then(() => {
-          console.log('[Telnyx Webhook] 3-Way Call bridged successfully');
+          console.log('[Telnyx Webhook] 3-Way 3rd party participant added to conference successfully');
           appendLog({
             type: 'call',
-            direction: 'bridge',
+            direction: 'conference',
             from: process.env.TELNYX_PHONE_NUMBER || '+12065960776',
-            to: payload.to || payload.from || '3-Way Party',
+            to: activeConference.thirdPartyNumber || answeredCallId,
             contactName: '3-Way Conference Active',
             company: '',
             status: 'three_way_active',
             duration: 0,
-            content: `3-Way Call bridged successfully with ${payload.to || answeredCallId}`,
-            callControlId: originalCallId
+            content: `Third party (${activeConference.thirdPartyNumber || answeredCallId}) joined conference`,
+            callControlId: activeConference.originalCallId,
+            conferenceId: activeConference.id
           });
 
           broadcast('call_status', {
-            callControlId: originalCallId,
-            bridgeCallId: answeredCallId,
-            status: 'three_way_active'
+            callControlId: activeConference.originalCallId,
+            conferenceId: activeConference.id,
+            newCallId: answeredCallId,
+            status: 'three_way_active',
+            thirdPartyNumber: activeConference.thirdPartyNumber,
+            message: 'Third party joined conference. Conference active.'
           });
         })
         .catch(err => {
-          console.error('[Telnyx Webhook] 3-Way bridge error:', err.message);
+          console.error('[Telnyx Webhook] Add participant to conference error:', err.message);
         });
+    } else if (answeredCallId && pendingThreeWayBridges.has(answeredCallId)) {
+      // Legacy fallback
+      const originalCallId = pendingThreeWayBridges.get(answeredCallId);
+      pendingThreeWayBridges.delete(answeredCallId);
+      telnyx.bridgeCall({ originalCallId, newCallId: answeredCallId }).catch(() => {});
     } else {
       broadcast('call_status', {
         callControlId: answeredCallId,
         status: 'answered'
       });
     }
-  } else if (event === 'call.hangup') {
+  } else if (event === 'conference.participant.joined') {
+    const confId = payload.conference_id;
+    const callLegId = payload.call_control_id;
+    console.log(`[Telnyx Webhook] Participant ${callLegId} joined conference ${confId}`);
+
+    appendLog({
+      type: 'call',
+      direction: 'conference',
+      from: process.env.TELNYX_PHONE_NUMBER || '+12065960776',
+      to: activeConference?.thirdPartyNumber || 'Participant',
+      contactName: '3-Way Conference',
+      company: '',
+      status: 'three_way_active',
+      duration: 0,
+      content: `Conference participant joined (${callLegId})`,
+      callControlId: activeConference?.originalCallId || callLegId,
+      conferenceId: confId
+    });
+
     broadcast('call_status', {
-      callControlId: payload.call_control_id,
+      callControlId: activeConference?.originalCallId,
+      conferenceId: confId,
+      status: 'three_way_active',
+      thirdPartyNumber: activeConference?.thirdPartyNumber,
+      message: 'Third party joined conference'
+    });
+  } else if (event === 'conference.participant.left') {
+    const confId = payload.conference_id;
+    const callLegId = payload.call_control_id;
+    console.log(`[Telnyx Webhook] Participant ${callLegId} left conference ${confId}`);
+
+    appendLog({
+      type: 'call',
+      direction: 'conference',
+      from: process.env.TELNYX_PHONE_NUMBER || '+12065960776',
+      to: 'Participant',
+      contactName: '3-Way Conference',
+      company: '',
+      status: 'three_way_participant_left',
+      duration: 0,
+      content: `Conference participant left (${callLegId})`,
+      callControlId: activeConference?.originalCallId || callLegId,
+      conferenceId: confId
+    });
+
+    if (activeConference && activeConference.newCallId === callLegId) {
+      activeConference.newCallId = null;
+      broadcast('call_status', {
+        callControlId: activeConference.originalCallId,
+        conferenceId: confId,
+        status: 'three_way_ended',
+        message: 'Third party left conference'
+      });
+    }
+  } else if (event === 'conference.ended') {
+    const confId = payload.conference_id;
+    console.log(`[Telnyx Webhook] Conference ended: ${confId}`);
+
+    appendLog({
+      type: 'call',
+      direction: 'conference',
+      from: process.env.TELNYX_PHONE_NUMBER || '+12065960776',
+      to: 'Conference',
+      contactName: '3-Way Conference Ended',
+      company: '',
+      status: 'conference_ended',
+      duration: 0,
+      content: `Conference ended (${confId})`,
+      callControlId: activeConference?.originalCallId,
+      conferenceId: confId
+    });
+
+    broadcast('call_status', {
+      callControlId: activeConference?.originalCallId,
+      conferenceId: confId,
+      status: 'three_way_ended',
+      message: 'Conference ended'
+    });
+
+    activeConference = null;
+  } else if (event === 'call.hangup') {
+    const hungupId = payload.call_control_id;
+    if (activeConference && activeConference.newCallId === hungupId) {
+      activeConference.newCallId = null;
+      broadcast('call_status', {
+        callControlId: activeConference.originalCallId,
+        status: 'three_way_ended',
+        message: 'Third party hung up'
+      });
+    } else if (activeConference && activeConference.originalCallId === hungupId) {
+      activeConference = null;
+    }
+    broadcast('call_status', {
+      callControlId: hungupId,
       status: 'completed',
       duration: payload.duration_secs || 0
     });

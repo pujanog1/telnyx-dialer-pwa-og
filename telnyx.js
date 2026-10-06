@@ -469,6 +469,148 @@ class TelnyxClient {
       throw err;
     }
   }
+
+  /**
+   * Create a conference and add the existing call leg
+   * Telnyx Call Control v2: POST /v2/conferences
+   */
+  async createConferenceWithCall({ callControlId, name }) {
+    const confName = name || ('conf_' + Date.now());
+
+    if (!this.isConfigured() || (callControlId && String(callControlId).startsWith('sim_'))) {
+      const simConfId = 'sim_conf_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+      console.log(`[Telnyx Simulator] Created conference "${confName}" (id: ${simConfId}) with call ${callControlId}`);
+      return {
+        success: true,
+        mode: 'simulated',
+        id: simConfId,
+        conference_id: simConfId,
+        name: confName,
+        call_control_id: callControlId
+      };
+    }
+
+    try {
+      const payload = {
+        name: confName,
+        call_control_id: callControlId,
+        start_conference_on_create: true
+      };
+
+      const response = await fetch(`${TELNYX_API_BASE}/conferences`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.errors?.[0]?.detail || `Telnyx create conference error ${response.status}: ${JSON.stringify(data)}`);
+      }
+
+      return {
+        success: true,
+        mode: 'live',
+        id: data.data?.id,
+        conference_id: data.data?.id,
+        ...data.data
+      };
+    } catch (err) {
+      console.error('[Telnyx API Error] createConferenceWithCall failed:', err.message);
+      throw err;
+    }
+  }
+
+  /**
+   * Add a call leg to an active conference
+   * Telnyx Call Control v2: POST /v2/conferences/{conference_id}/participants
+   */
+  async addParticipantToConference({ conferenceId, callControlId }) {
+    if (!this.isConfigured() || (conferenceId && String(conferenceId).startsWith('sim_')) || (callControlId && String(callControlId).startsWith('sim_'))) {
+      console.log(`[Telnyx Simulator] Added participant ${callControlId} to conference ${conferenceId}`);
+      return {
+        success: true,
+        mode: 'simulated',
+        conference_id: conferenceId,
+        call_control_id: callControlId,
+        status: 'joined'
+      };
+    }
+
+    try {
+      const payload = {
+        call_control_id: callControlId
+      };
+
+      const response = await fetch(`${TELNYX_API_BASE}/conferences/${encodeURIComponent(conferenceId)}/participants`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.errors?.[0]?.detail || `Telnyx add participant error ${response.status}: ${JSON.stringify(data)}`);
+      }
+
+      return {
+        success: true,
+        mode: 'live',
+        ...data.data
+      };
+    } catch (err) {
+      console.error('[Telnyx API Error] addParticipantToConference failed:', err.message);
+      throw err;
+    }
+  }
+
+  /**
+   * Remove a participant from a conference or hangup participant
+   * Telnyx Call Control v2: POST /v2/conferences/{conference_id}/participants/{call_control_id}/leave
+   */
+  async leaveConferenceParticipant({ conferenceId, callControlId }) {
+    if (!this.isConfigured() || (conferenceId && String(conferenceId).startsWith('sim_')) || (callControlId && String(callControlId).startsWith('sim_'))) {
+      console.log(`[Telnyx Simulator] Participant ${callControlId} left conference ${conferenceId}`);
+      return {
+        success: true,
+        mode: 'simulated',
+        conference_id: conferenceId,
+        call_control_id: callControlId,
+        status: 'left'
+      };
+    }
+
+    try {
+      const response = await fetch(`${TELNYX_API_BASE}/conferences/${encodeURIComponent(conferenceId)}/participants/${encodeURIComponent(callControlId)}/leave`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify({})
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        return await this.hangupCall(callControlId);
+      }
+
+      return {
+        success: true,
+        mode: 'live',
+        ...data.data
+      };
+    } catch (err) {
+      console.error('[Telnyx API Error] leaveConferenceParticipant fallback to hangup:', err.message);
+      return await this.hangupCall(callControlId);
+    }
+  }
 }
 
 module.exports = new TelnyxClient();
