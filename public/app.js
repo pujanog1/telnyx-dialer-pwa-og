@@ -525,18 +525,33 @@
       client.on('telnyx.notification', (notification) => {
         console.log('[Telnyx WebRTC Notification]', notification);
         if (notification.type === 'callUpdate' && notification.call) {
-          const callState = notification.call.state;
-          const legId = notification.call.telnyxLegId || notification.call.id || notification.call.options?.callId;
-          if (legId && state.activeCall) {
-            state.activeCall.callControlId = legId;
+          const callObj = notification.call;
+          const callState = callObj.state;
+
+          // Extract call_control_id (prioritize v2: format over leg UUID)
+          const ccId = callObj.call_control_id ||
+                       callObj.telnyxIDs?.callControlId ||
+                       callObj.options?.callControlId ||
+                       callObj.callControlId ||
+                       (typeof callObj.id === 'string' && callObj.id.startsWith('v2:') ? callObj.id : null) ||
+                       callObj.telnyxLegId ||
+                       callObj.id;
+
+          if (ccId) {
+            state.activeCallControlId = ccId;
+            if (state.activeCall) {
+              state.activeCall.callControlId = ccId;
+            }
           }
-          if (callState === 'ringing') {
-            els.callStatusBadge.textContent = 'Ringing...';
-            els.callStatusBadge.style.color = 'var(--accent-sky)';
-          } else if (callState === 'active' || callState === 'answering') {
+
+          if (callState === 'active' || callState === 'answering') {
+            console.log('[Telnyx WebRTC] Active Call Control ID:', state.activeCallControlId, 'Full Call Obj:', callObj);
             els.callStatusBadge.textContent = 'Connected (2-Way Audio)';
             els.callStatusBadge.style.color = 'var(--accent-emerald)';
             startCallTimer();
+          } else if (callState === 'ringing') {
+            els.callStatusBadge.textContent = 'Ringing...';
+            els.callStatusBadge.style.color = 'var(--accent-sky)';
           } else if (callState === 'hangup' || callState === 'destroy') {
             handleWebRtcHangup();
           }
@@ -902,11 +917,17 @@
     }
 
     try {
-      const activeCallId = state.activeCall.callControlId || 
-                           state.webrtcCall?.telnyxLegId || 
-                           state.webrtcCall?.id || 
-                           state.activeCall.id || 
+      const activeCallId = state.activeCallControlId ||
+                           state.activeCall?.callControlId ||
+                           state.webrtcCall?.call_control_id ||
+                           state.webrtcCall?.telnyxIDs?.callControlId ||
+                           state.webrtcCall?.options?.callControlId ||
+                           state.webrtcCall?.telnyxLegId ||
+                           state.webrtcCall?.id ||
+                           state.activeCall?.id ||
                            ('call_' + Date.now());
+
+      console.log('[3-Way Call] Using callControlId for conference creation:', activeCallId);
 
       const response = await fetch('/api/call/three-way', {
         method: 'POST',
