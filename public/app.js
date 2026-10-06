@@ -28,7 +28,9 @@
     waConversations: [],
     waMessages: [],
     activeConferenceId: null,
-    activeConferenceNewCallId: null
+    activeConferenceNewCallId: null,
+    currentWebRTCSessionId: null,  // unique per-call session ID sent via SIP custom header
+    activeCallControlId: null      // v2:... call_control_id received from webhook
   };
 
   // DTMF Standard Frequencies (Hz)
@@ -523,40 +525,23 @@
       });
 
       client.on('telnyx.notification', (notification) => {
-        console.log('[Telnyx WebRTC Notification]', notification);
         if (notification.type === 'callUpdate' && notification.call) {
-          const callObj = notification.call;
-          const callState = callObj.state;
+          const call = notification.call;
+          const callState = call.state;
 
-          // Extract call_control_id (prioritize v2: format over leg UUID)
-          const ccId = callObj.call_control_id ||
-                       callObj.telnyxIDs?.callControlId ||
-                       callObj.options?.callControlId ||
-                       callObj.callControlId ||
-                       (typeof callObj.id === 'string' && callObj.id.startsWith('v2:') ? callObj.id : null) ||
-                       callObj.telnyxLegId ||
-                       callObj.id;
-
+          // Capture call_control_id on every state update
+          const ccId = call.call_control_id || call.options?.callControlId;
           if (ccId) {
             state.activeCallControlId = ccId;
-            if (state.activeCall) {
-              state.activeCall.callControlId = ccId;
-            }
+            if (state.activeCall) state.activeCall.callControlId = ccId;
           }
+          console.log('[CALL ID]', call.call_control_id, '| state:', callState, '| stored:', state.activeCallControlId);
 
           if (callState === 'active' || callState === 'answering') {
-            console.log('[DEBUG] Full notification:', notification);
-            console.log('[DEBUG] Full call object:', JSON.stringify(callObj, null, 2));
-            console.log('[DEBUG] call.id:', callObj.id);
-            console.log('[DEBUG] call.call_control_id:', callObj.call_control_id);
-            console.log('[DEBUG] call.telnyxIDs:', callObj.telnyxIDs);
-            console.log('[DEBUG] call.options:', callObj.options);
-            console.log('[DEBUG] All keys:', Object.keys(callObj));
-
             els.callStatusBadge.textContent = 'Connected (2-Way Audio)';
             els.callStatusBadge.style.color = 'var(--accent-emerald)';
             startCallTimer();
-          } else if (callState === 'ringing') {
+          } else if (callState === 'ringing' || callState === 'trying') {
             els.callStatusBadge.textContent = 'Ringing...';
             els.callStatusBadge.style.color = 'var(--accent-sky)';
           } else if (callState === 'hangup' || callState === 'destroy') {
@@ -670,11 +655,18 @@
         const fromNumber = state.webrtcConfig?.callerNumber || els.currentFromNumber.textContent.replace(/[^\d+]/g, '');
         const remoteElem = document.getElementById('telnyxRemoteAudio') || els.telnyxRemoteAudio;
 
+        const sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+        state.currentWebRTCSessionId = sessionId;
+        console.log('[WEBRTC] Calling with sessionId:', sessionId);
+
         state.webrtcCall = state.webrtcClient.newCall({
           destinationNumber: fullNumber,
           callerNumber: fromNumber,
           audio: true,
-          remoteElement: remoteElem
+          remoteElement: remoteElem,
+          customHeaders: [
+            { name: 'X-Client-Session-ID', value: sessionId }
+          ]
         });
 
         showToast('WebRTC In-Browser Call', `Audio connected to browser mic & speaker`);
@@ -924,23 +916,14 @@
     }
 
     try {
-      const activeCallId = state.activeCallControlId ||
-                           state.activeCall?.callControlId ||
-                           state.webrtcCall?.call_control_id ||
-                           state.webrtcCall?.telnyxIDs?.callControlId ||
-                           state.webrtcCall?.options?.callControlId ||
-                           state.webrtcCall?.telnyxLegId ||
-                           state.webrtcCall?.id ||
-                           state.activeCall?.id ||
-                           ('call_' + Date.now());
-
-      console.log('[3-Way Call] Using callControlId for conference creation:', activeCallId);
+      const sessionId = state.currentWebRTCSessionId;
+      console.log('[3-Way Call] Using sessionId:', sessionId);
 
       const response = await fetch('/api/call/three-way', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          callControlId: activeCallId,
+          sessionId,
           to: targetPhone
         })
       });

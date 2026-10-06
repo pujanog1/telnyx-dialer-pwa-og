@@ -445,14 +445,30 @@ app.post('/api/call/transfer', async (req, res) => {
 // Active 3-Way Conference state: { id, originalCallId, newCallId, thirdPartyNumber }
 let activeConference = null;
 const pendingThreeWayBridges = new Map(); // Kept as fallback
+const webrtcSessions = new Map(); // sessionId → call_control_id (populated from webhooks)
 
 app.post('/api/call/three-way', async (req, res) => {
-  const { callControlId, to, from } = req.body;
+  const { sessionId, to, from } = req.body;
   if (!to) {
     return res.status(400).json({ error: 'Third party phone number is required for 3-Way Call' });
   }
+  if (!sessionId) {
+    return res.status(400).json({ error: 'sessionId is required for 3-Way Call' });
+  }
+
+  // Look up the real call_control_id from the webhook-populated map
+  const callControlId = webrtcSessions.get(sessionId);
+  console.log('[3-WAY] sessionId:', sessionId);
+  console.log('[3-WAY] webrtcSessions Map size:', webrtcSessions.size);
+  console.log('[3-WAY] callControlId from map:', callControlId);
+  console.log('[3-WAY] Is v2 format?', callControlId?.startsWith('v2:'));
+
   if (!callControlId) {
-    return res.status(400).json({ error: 'Active call control ID is required for 3-Way Call' });
+    return res.status(400).json({
+      error: 'WebRTC session not found. Make sure your call is active and the webhook has been received.',
+      sessionId,
+      mapSize: webrtcSessions.size
+    });
   }
 
   const fromNumber = from || process.env.TELNYX_PHONE_NUMBER || '+12065960776';
@@ -461,7 +477,7 @@ app.post('/api/call/three-way', async (req, res) => {
   try {
     // 1. Create conference using the EXISTING WebRTC call leg
     const confName = 'conf_' + Date.now();
-    console.log(`[3-Way Conference] Creating conference "${confName}" with call leg ${callControlId}...`);
+    console.log(`[3-Way Conference] Creating conference "${confName}" with call_control_id ${callControlId}...`);
     const confResult = await telnyx.createConferenceWithCall({
       callControlId,
       name: confName
@@ -1120,6 +1136,21 @@ app.post('/webhook', (req, res) => {
   const payload = req.body?.data?.payload || {};
 
   console.log(`[Telnyx Webhook Event] ${event}`);
+
+  // ── WebRTC Session Mapping ──────────────────────────────────────────────────
+  // Capture call_control_id (v2:...) from webhook custom headers so we can
+  // use it for Conference API calls (browser SDK only gives us a UUID).
+  if (event === 'call.initiated' || event === 'call.answered') {
+    const callControlId = payload.call_control_id;
+    const customHeaders = payload.custom_headers || [];
+    const sessionHeader = customHeaders.find(h => h.name === 'X-Client-Session-ID');
+    if (sessionHeader && callControlId) {
+      webrtcSessions.set(sessionHeader.value, callControlId);
+      console.log('[WEBRTC MAP] sessionId =', sessionHeader.value, '→ call_control_id =', callControlId);
+      console.log('[WEBRTC MAP] Map size:', webrtcSessions.size);
+    }
+  }
+  // ───────────────────────────────────────────────────────────────────────────
 
   if (event === 'call.answered') {
     const answeredCallId = payload.call_control_id;
