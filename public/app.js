@@ -545,7 +545,14 @@
           }
 
           if (callState === 'active' || callState === 'answering') {
-            console.log('[Telnyx WebRTC] Active Call Control ID:', state.activeCallControlId, 'Full Call Obj:', callObj);
+            console.log('[DEBUG] Full notification:', notification);
+            console.log('[DEBUG] Full call object:', JSON.stringify(callObj, null, 2));
+            console.log('[DEBUG] call.id:', callObj.id);
+            console.log('[DEBUG] call.call_control_id:', callObj.call_control_id);
+            console.log('[DEBUG] call.telnyxIDs:', callObj.telnyxIDs);
+            console.log('[DEBUG] call.options:', callObj.options);
+            console.log('[DEBUG] All keys:', Object.keys(callObj));
+
             els.callStatusBadge.textContent = 'Connected (2-Way Audio)';
             els.callStatusBadge.style.color = 'var(--accent-emerald)';
             startCallTimer();
