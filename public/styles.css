@@ -590,6 +590,12 @@ body {
   color: var(--accent-sky);
 }
 
+.btn-hud-threeway:hover {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: var(--accent-purple);
+  color: var(--accent-purple);
+}
+
 .btn-hud-hangup {
   background: var(--gradient-hangup);
   color: #fff;

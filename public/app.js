@@ -78,12 +78,15 @@
     callHudCompany: document.getElementById('callHudCompany'),
     callHudNumber: document.getElementById('callHudNumber'),
     callStatusBadge: document.getElementById('callStatusBadge'),
+    threeWayActiveBadge: document.getElementById('threeWayActiveBadge'),
     callTimerDisplay: document.getElementById('callTimerDisplay'),
     btnMuteCall: document.getElementById('btnMuteCall'),
     muteIcon: document.getElementById('muteIcon'),
     btnKeypadToggle: document.getElementById('btnKeypadToggle'),
     btnTransferCall: document.getElementById('btnTransferCall'),
+    btnThreeWayCall: document.getElementById('btnThreeWayCall'),
     btnEndCall: document.getElementById('btnEndCall'),
+    btnEndCallText: document.getElementById('btnEndCallText'),
 
     // Transfer Modal
     transferModal: document.getElementById('transferModal'),
@@ -92,6 +95,14 @@
     btnCloseTransferModal: document.getElementById('btnCloseTransferModal'),
     btnCancelTransfer: document.getElementById('btnCancelTransfer'),
     btnExecuteTransfer: document.getElementById('btnExecuteTransfer'),
+
+    // 3-Way Modal
+    threeWayModal: document.getElementById('threeWayModal'),
+    threeWayForm: document.getElementById('threeWayForm'),
+    threeWayTargetPhone: document.getElementById('threeWayTargetPhone'),
+    btnCloseThreeWayModal: document.getElementById('btnCloseThreeWayModal'),
+    btnCancelThreeWay: document.getElementById('btnCancelThreeWay'),
+    btnExecuteThreeWay: document.getElementById('btnExecuteThreeWay'),
 
     // Sub-Tabs
     tabButtons: document.querySelectorAll('.card-tab-nav .tab-item'),
@@ -806,9 +817,13 @@
       showToast('Call Transferred', `Call successfully handed off to ${targetPhone}`);
       closeTransferModal();
 
+      showToast('Call Transferred', `Call successfully handed off to ${targetPhone}`);
+      closeTransferModal();
+
       // End local dialer view for this transferred call
       stopCallTimer();
       els.activeCallHud.classList.add('hidden');
+      if (els.threeWayActiveBadge) els.threeWayActiveBadge.classList.add('hidden');
       state.activeCall = null;
       state.callDurationSeconds = 0;
       updateCallTimerDisplay();
@@ -823,6 +838,82 @@
     }
   }
 
+  // =========================================================================
+  // 3-WAY CONFERENCE CALL
+  // =========================================================================
+  function openThreeWayModal() {
+    if (!state.activeCall) {
+      showToast('No Active Call', 'You must have an ongoing call to start a 3-way conference.');
+      return;
+    }
+    if (els.threeWayTargetPhone) {
+      els.threeWayTargetPhone.value = '';
+    }
+    if (els.threeWayModal) {
+      els.threeWayModal.classList.remove('hidden');
+      if (els.threeWayTargetPhone) {
+        setTimeout(() => els.threeWayTargetPhone.focus(), 100);
+      }
+    }
+  }
+
+  function closeThreeWayModal() {
+    if (els.threeWayModal) {
+      els.threeWayModal.classList.add('hidden');
+    }
+  }
+
+  async function executeThreeWay(e) {
+    if (e) e.preventDefault();
+    if (!state.activeCall) {
+      showToast('3-Way Failed', 'No active call for conference.');
+      closeThreeWayModal();
+      return;
+    }
+
+    const rawTarget = els.threeWayTargetPhone.value.trim();
+    if (!rawTarget) {
+      showToast('Missing Number', 'Please enter third party number for 3-way call.');
+      return;
+    }
+
+    const defaultCountry = els.countryCodeSelect ? els.countryCodeSelect.value : '+1';
+    const targetPhone = rawTarget.startsWith('+') ? rawTarget : `${defaultCountry}${rawTarget.replace(/^0+/, '')}`;
+
+    showToast('Connecting 3rd Party', `Dialing ${targetPhone} for 3-Way Call...`);
+    if (els.callStatusBadge) {
+      els.callStatusBadge.textContent = 'Dialing 3rd Party...';
+      els.callStatusBadge.style.color = 'var(--accent-purple)';
+    }
+
+    try {
+      const activeCallId = state.activeCall.callControlId || state.activeCall.id || ('call_' + Date.now());
+      const response = await fetch('/api/call/three-way', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          callControlId: activeCallId,
+          to: targetPhone
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to initiate 3-Way call via Telnyx');
+      }
+
+      closeThreeWayModal();
+      fetchLogs();
+    } catch (err) {
+      console.error('3-Way call error:', err);
+      showToast('3-Way Call Failed', err.message);
+      if (els.callStatusBadge) {
+        els.callStatusBadge.textContent = 'Connected';
+        els.callStatusBadge.style.color = 'var(--accent-emerald)';
+      }
+    }
+  }
+
   function handleCallStatusEvent(data) {
     if (data.status === 'answered') {
       if (els.callStatusBadge) {
@@ -830,15 +921,33 @@
         els.callStatusBadge.style.color = 'var(--accent-emerald)';
       }
       startCallTimer();
+    } else if (data.status === 'three_way_connecting') {
+      if (els.callStatusBadge) {
+        els.callStatusBadge.textContent = `Connecting ${data.thirdPartyNumber || '3rd Party'}...`;
+        els.callStatusBadge.style.color = 'var(--accent-purple)';
+      }
+      showToast('Connecting 3rd Party', `Dialing ${data.thirdPartyNumber || '3rd party'}...`);
+    } else if (data.status === 'three_way_active') {
+      if (els.callStatusBadge) {
+        els.callStatusBadge.textContent = '3-Way Call Active';
+        els.callStatusBadge.style.color = 'var(--accent-purple)';
+      }
+      if (els.threeWayActiveBadge) {
+        els.threeWayActiveBadge.classList.remove('hidden');
+      }
+      showToast('3-Way Call Active', 'All parties connected in conference call');
+      fetchLogs();
     } else if (data.status === 'transferred') {
       showToast('Call Transferred', `Call routed to ${data.transferTo}`);
       stopCallTimer();
       els.activeCallHud.classList.add('hidden');
+      if (els.threeWayActiveBadge) els.threeWayActiveBadge.classList.add('hidden');
       state.activeCall = null;
       fetchLogs();
     } else if (data.status === 'completed') {
       stopCallTimer();
       els.activeCallHud.classList.add('hidden');
+      if (els.threeWayActiveBadge) els.threeWayActiveBadge.classList.add('hidden');
       state.activeCall = null;
       fetchRecordings();
       fetchLogs();
@@ -2019,6 +2128,23 @@
 
   if (els.transferForm) {
     els.transferForm.addEventListener('submit', executeTransfer);
+  }
+
+  // 3-Way Call HUD & Modal Controls
+  if (els.btnThreeWayCall) {
+    els.btnThreeWayCall.addEventListener('click', openThreeWayModal);
+  }
+
+  if (els.btnCloseThreeWayModal) {
+    els.btnCloseThreeWayModal.addEventListener('click', closeThreeWayModal);
+  }
+
+  if (els.btnCancelThreeWay) {
+    els.btnCancelThreeWay.addEventListener('click', closeThreeWayModal);
+  }
+
+  if (els.threeWayForm) {
+    els.threeWayForm.addEventListener('submit', executeThreeWay);
   }
 
   els.btnMuteCall.addEventListener('click', () => {

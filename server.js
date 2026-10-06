@@ -442,6 +442,100 @@ app.post('/api/call/transfer', async (req, res) => {
   }
 });
 
+// Pending 3-Way bridge mapping: { bridgeCallId: originalCallId }
+const pendingThreeWayBridges = new Map();
+
+app.post('/api/call/three-way', async (req, res) => {
+  const { callControlId, to, from } = req.body;
+  if (!to) {
+    return res.status(400).json({ error: 'Third party phone number is required for 3-Way Call' });
+  }
+  if (!callControlId) {
+    return res.status(400).json({ error: 'Active call control ID is required for 3-Way Call' });
+  }
+
+  const fromNumber = from || process.env.TELNYX_PHONE_NUMBER || '+12065960776';
+  const publicUrl = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
+
+  try {
+    const result = await telnyx.threeWayCall({
+      to,
+      from: fromNumber,
+      webhookUrl: `${publicUrl}/webhook`
+    });
+
+    const bridgeCallId = result.call_control_id;
+
+    // Track mapping so when bridgeCallId is answered, we bridge with callControlId (original call)
+    pendingThreeWayBridges.set(bridgeCallId, callControlId);
+
+    // Append activity log
+    appendLog({
+      type: 'call',
+      direction: 'outbound',
+      from: fromNumber,
+      to,
+      contactName: '3-Way Conference Party',
+      company: '',
+      status: 'connecting_3way',
+      duration: 0,
+      content: `Connecting 3rd party (${to}) for 3-Way Conference Call`,
+      callControlId: bridgeCallId,
+      originalCallId: callControlId
+    });
+
+    broadcast('call_status', {
+      callControlId,
+      bridgeCallId,
+      status: 'three_way_connecting',
+      thirdPartyNumber: to
+    });
+
+    // If running in simulator mode, automatically simulate the answer & bridge after a short delay
+    if (result.mode === 'simulated' || bridgeCallId.startsWith('sim_')) {
+      setTimeout(async () => {
+        try {
+          console.log(`[Telnyx Simulator] Auto-bridging simulated 3-way call ${callControlId} with ${bridgeCallId}`);
+          await telnyx.bridgeCall({ originalCallId: callControlId, newCallId: bridgeCallId });
+          pendingThreeWayBridges.delete(bridgeCallId);
+
+          appendLog({
+            type: 'call',
+            direction: 'bridge',
+            from: fromNumber,
+            to,
+            contactName: '3-Way Conference Active',
+            company: '',
+            status: 'three_way_active',
+            duration: 0,
+            content: `3-Way Call bridged successfully with ${to}`,
+            callControlId
+          });
+
+          broadcast('call_status', {
+            callControlId,
+            bridgeCallId,
+            status: 'three_way_active',
+            thirdPartyNumber: to
+          });
+        } catch (simErr) {
+          console.error('[Telnyx Simulator Error] 3-way auto-bridge failed:', simErr.message);
+        }
+      }, 1500);
+    }
+
+    res.json({
+      success: true,
+      message: `Initiated 3-Way call to ${to}. Awaiting answer to bridge.`,
+      bridgeCallId,
+      originalCallId: callControlId
+    });
+  } catch (err) {
+    console.error('3-Way call error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // WebRTC SIP Credentials & In-Browser Call Logging
 app.get('/api/webrtc/credentials', (req, res) => {
   const username = process.env.TELNYX_SIP_USERNAME || '';
@@ -963,10 +1057,46 @@ app.post('/webhook', (req, res) => {
   console.log(`[Telnyx Webhook Event] ${event}`);
 
   if (event === 'call.answered') {
-    broadcast('call_status', {
-      callControlId: payload.call_control_id,
-      status: 'answered'
-    });
+    const answeredCallId = payload.call_control_id;
+
+    // Check if this answered call is a pending 3-way third party call
+    if (answeredCallId && pendingThreeWayBridges.has(answeredCallId)) {
+      const originalCallId = pendingThreeWayBridges.get(answeredCallId);
+      pendingThreeWayBridges.delete(answeredCallId);
+
+      console.log(`[Telnyx Webhook] 3-Way call answered. Bridging ${originalCallId} with ${answeredCallId}...`);
+
+      telnyx.bridgeCall({ originalCallId, newCallId: answeredCallId })
+        .then(() => {
+          console.log('[Telnyx Webhook] 3-Way Call bridged successfully');
+          appendLog({
+            type: 'call',
+            direction: 'bridge',
+            from: process.env.TELNYX_PHONE_NUMBER || '+12065960776',
+            to: payload.to || payload.from || '3-Way Party',
+            contactName: '3-Way Conference Active',
+            company: '',
+            status: 'three_way_active',
+            duration: 0,
+            content: `3-Way Call bridged successfully with ${payload.to || answeredCallId}`,
+            callControlId: originalCallId
+          });
+
+          broadcast('call_status', {
+            callControlId: originalCallId,
+            bridgeCallId: answeredCallId,
+            status: 'three_way_active'
+          });
+        })
+        .catch(err => {
+          console.error('[Telnyx Webhook] 3-Way bridge error:', err.message);
+        });
+    } else {
+      broadcast('call_status', {
+        callControlId: answeredCallId,
+        status: 'answered'
+      });
+    }
   } else if (event === 'call.hangup') {
     broadcast('call_status', {
       callControlId: payload.call_control_id,

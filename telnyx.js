@@ -362,9 +362,101 @@ class TelnyxClient {
         body: JSON.stringify(payload)
       });
 
+      return {
+        success: true,
+        mode: 'live',
+        ...data.data
+      };
+    } catch (err) {
+      console.error('[Telnyx API Error] transferCall failed:', err.message);
+      throw err;
+    }
+  }
+
+  /**
+   * Initiate 3-Way Conference Call by dialing third party via /v2/calls
+   */
+  async threeWayCall({ to, from, webhookUrl }) {
+    const sender = from || this.fromNumber;
+    if (!this.isConfigured()) {
+      const simCallId = 'sim_3way_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+      console.log(`[Telnyx Simulator] Creating 3-way outbound call to ${to} (call_control_id: ${simCallId})`);
+      return {
+        success: true,
+        mode: 'simulated',
+        call_control_id: simCallId,
+        to,
+        from: sender,
+        status: 'dialing'
+      };
+    }
+
+    try {
+      const payload = {
+        to,
+        from: sender,
+        connection_id: process.env.TELNYX_CONNECTION_ID,
+        webhook_url: webhookUrl
+      };
+
+      const response = await fetch(`${TELNYX_API_BASE}/calls`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify(payload)
+      });
+
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.errors?.[0]?.detail || `Telnyx transfer error ${response.status}: ${JSON.stringify(data)}`);
+        throw new Error(data.errors?.[0]?.detail || `Telnyx 3-way dial error ${response.status}: ${JSON.stringify(data)}`);
+      }
+
+      return {
+        success: true,
+        mode: 'live',
+        call_control_id: data.data?.call_control_id,
+        ...data.data
+      };
+    } catch (err) {
+      console.error('[Telnyx API Error] threeWayCall failed:', err.message);
+      throw err;
+    }
+  }
+
+  /**
+   * Bridge two call control legs together: POST /v2/calls/{originalCallId}/actions/bridge
+   */
+  async bridgeCall({ originalCallId, newCallId }) {
+    if (!this.isConfigured() || (originalCallId && originalCallId.startsWith('sim_'))) {
+      console.log(`[Telnyx Simulator] Bridging calls ${originalCallId} and ${newCallId}`);
+      return {
+        success: true,
+        mode: 'simulated',
+        originalCallId,
+        newCallId,
+        status: 'bridged'
+      };
+    }
+
+    try {
+      const payload = {
+        call_control_id: newCallId
+      };
+
+      const response = await fetch(`${TELNYX_API_BASE}/calls/${encodeURIComponent(originalCallId)}/actions/bridge`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.errors?.[0]?.detail || `Telnyx bridge error ${response.status}: ${JSON.stringify(data)}`);
       }
 
       return {
@@ -373,7 +465,7 @@ class TelnyxClient {
         ...data.data
       };
     } catch (err) {
-      console.error('[Telnyx API Error] transferCall failed:', err.message);
+      console.error('[Telnyx API Error] bridgeCall failed:', err.message);
       throw err;
     }
   }
